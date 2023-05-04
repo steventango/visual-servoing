@@ -29,3 +29,17 @@ def rotation_matrix(rotation: np.ndarray):
     ])
     R[:3, :3] = Rz @ Ry @ Rx
     return R
+
+
+def translation_matrix(translation: np.ndarray):
+    t = np.array(translation).reshape(-1, 1)
+    H = np.eye(4)
+    H[:3, 3:] = t
+    return H
+
+
+def homogenous_matrix(rotation: np.ndarray, translation: np.ndarray):
+    R = rotation_matrix(rotation)[:3, :3]
+    H = translation_matrix(translation)
+    H[:3, :3] = R
+    return H

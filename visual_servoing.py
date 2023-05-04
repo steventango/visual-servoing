@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.linalg as la
 import matplotlib.pyplot as plt
+import transforms as tr
 from cameras import camera_matrix
 
 N = 20
@@ -15,69 +16,35 @@ POINT_ORIGIN = np.array([
 POINT_TARGET = np.array([
     -0.3,
     0.3,
-    0.3,
+    0.7,
     1
 ]).T
 THETA = np.array([0, -np.pi/4, np.pi/2])
 LENGTH = np.array([0, 0.55, 0.30])
 TRAJECTORY_Z_MIDPOINT = 0.6
 
-PROJECTION = np.array([
-    [1, 0, 0, 0],
-    [0, 1, 0, 0],
-    [0, 0, 0, 1]
-])
-ROTATION_CAMERA_1 = np.array([np.pi/2, 0, 0])
-TRANSLATION_CAMERA_1 = np.array([0, -1, 0.5])
-PROJECTION_1 = camera_matrix(ROTATION_CAMERA_1, TRANSLATION_CAMERA_1)
-
-PROJECTION_2 = np.array([
-    [1, 0, 0, 0],
-    [0, 1, 0, 0],
-    [0, 0, 0, 1]
-])
-ROTATION_CAMERA_2 = np.array([
-    np.pi/2, 0, -np.pi/2]
-)
-TRANSLATION_CAMERA_2 = np.array([-1, 0, 0.5])
-PROJECTION_2 = camera_matrix(ROTATION_CAMERA_2, TRANSLATION_CAMERA_2)
+PROJECTION_1 = camera_matrix([np.pi/2, 0, 0], [0, -1, 0.5])
+PROJECTION_2 = camera_matrix([np.pi/2, 0, -np.pi/2], [-1, 0, 0.5])
 
 
 def forward_kinematics(theta: np.ndarray):
     x_1 = POINT_ORIGIN
-    H_1 = np.array([
-        [np.cos(theta[0]), -np.sin(theta[0]), 0, 0],
-        [np.sin(theta[0]), np.cos(theta[0]), 0, 0],
-        [0, 0, 1, 0],
-        [0, 0, 0, 1]
-    ])
-    H_2 = np.array([
-        [np.cos(theta[1]), 0, np.sin(theta[1]), 0],
-        [0, 1, 0, 0],
-        [-np.sin(theta[1]), 0, np.cos(theta[1]), LENGTH[0]],
-        [0, 0, 0, 1]
-    ])
-    x_3 = H_1 @ H_2 @ POINT_ORIGIN
-    H_3 = np.array([
-        [np.cos(theta[2]), 0, np.sin(theta[2]), LENGTH[1]],
-        [0, 1, 0, 0],
-        [-np.sin(theta[2]), 0, np.cos(theta[2]), 0],
-        [0, 0, 0, 1]
-    ])
-    x_4 = H_1 @ H_2 @ H_3 @ POINT_ORIGIN
-    H_4 = np.array([
-        [1, 0, 0, LENGTH[2]],
-        [0, 1, 0, 0],
-        [0, 0, 1, 0],
-        [0, 0, 0, 1]
-    ])
-    x_5 = H_1 @ H_2 @ H_3 @ H_4 @ POINT_ORIGIN
+    H_1 = tr.rotation_matrix([0, 0, theta[0]])
+    H_2 = tr.homogenous_matrix([0, theta[1], 0], [0, 0, LENGTH[0]])
+    H = H_1 @ H_2
+    x_3 = H @ POINT_ORIGIN
+    H_3 = tr.homogenous_matrix([0, theta[2], 0], [LENGTH[1], 0, 0])
+    H = H @ H_3
+    x_4 = H @ POINT_ORIGIN
+    H_4 = tr.translation_matrix([LENGTH[2], 0, 0])
+    H = H @ H_4
+    x_5 = H @ POINT_ORIGIN
     X = np.column_stack((x_1, x_3, x_4, x_5))
     return X
 
 
 def render(X, p, p2, img_points_left, img_points_right):
-    fig = plt.figure(figsize=(12.8, 9.6))
+    fig = plt.figure(figsize=(12, 9))
     ax_3d = fig.add_subplot(2, 2, (1, 2), projection='3d')
     ax_image_left = fig.add_subplot(2, 2, 3)
     ax_image_right = fig.add_subplot(2, 2, 4)
@@ -90,8 +57,8 @@ def render(X, p, p2, img_points_left, img_points_right):
     ax_3d.plot(X[0, :], X[1, :], X[2, :], 'o-', label='Robot')
     ax_3d.plot(p[0], p[1], p[2], 'o', label='Target')
     ax_3d.plot(p2[0], p2[1], p2[2], 'o', label='Trajectory Target')
-    ax_3d.legend(loc='upper right')
     ax_3d.plot(X[0, -1], X[1, -1], X[2, -1], 'o-', label='End Effector')
+    ax_3d.legend(loc='upper right')
     ax_3d.set_xlabel('X')
     ax_3d.set_xlim(-1, 1)
     ax_3d.set_ylabel('Y')
@@ -183,11 +150,17 @@ def broydens_method(theta, target):
     return X, img_points_left, img_points_right, theta
 
 
+def project_points(P, points):
+    image = P @ points
+    image /= image[2, :]
+    return image
+
+
 def get_points(theta, target):
     X = forward_kinematics(theta)
     points = np.column_stack((X, POINT_TARGET, target))
-    img_points_left = PROJECTION_1 @ points
-    img_points_right = PROJECTION_2 @ points
+    img_points_left = project_points(PROJECTION_1, points)
+    img_points_right = project_points(PROJECTION_2, points)
     return X, img_points_left, img_points_right
 
 
