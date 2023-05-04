@@ -3,7 +3,7 @@ import numpy.linalg as la
 import matplotlib.pyplot as plt
 from cameras import camera_matrix
 
-N = 200
+N = 20
 alpha = 0.1
 beta = 0.5
 POINT_ORIGIN = np.array([
@@ -76,8 +76,8 @@ def forward_kinematics(theta: np.ndarray):
     return X
 
 
-def render(X, p, img_points_left, img_points_right):
-    fig = plt.figure()
+def render(X, p, p2, img_points_left, img_points_right):
+    fig = plt.figure(figsize=(12.8, 9.6))
     ax_3d = fig.add_subplot(2, 2, (1, 2), projection='3d')
     ax_image_left = fig.add_subplot(2, 2, 3)
     ax_image_right = fig.add_subplot(2, 2, 4)
@@ -88,9 +88,10 @@ def render(X, p, img_points_left, img_points_right):
     render_image(img_points_right, ax_image_right)
 
     ax_3d.plot(X[0, :], X[1, :], X[2, :], 'o-', label='Robot')
-    ax_3d.plot(X[0, -1], X[1, -1], X[2, -1], 'o-', label='End Effector')
     ax_3d.plot(p[0], p[1], p[2], 'o', label='Target')
+    ax_3d.plot(p2[0], p2[1], p2[2], 'o', label='Trajectory Target')
     ax_3d.legend(loc='upper right')
+    ax_3d.plot(X[0, -1], X[1, -1], X[2, -1], 'o-', label='End Effector')
     ax_3d.set_xlabel('X')
     ax_3d.set_xlim(-1, 1)
     ax_3d.set_ylabel('Y')
@@ -101,9 +102,10 @@ def render(X, p, img_points_left, img_points_right):
 
 
 def render_image(img_points, ax_image):
-    ax_image.plot(img_points[0, :-1], img_points[1, :-1], 'o-', label='Robot')
-    ax_image.plot(img_points[0, -2], img_points[1, -2], 'o-', label='End Effector')
+    ax_image.plot(img_points[0, :-2], img_points[1, :-2], 'o-', label='Robot')
     ax_image.plot(img_points[0, -1], img_points[1, -1], 'o', label='Target')
+    ax_image.plot(img_points[0, -2], img_points[1, -2], 'o', label='Trajectory Target')
+    ax_image.plot(img_points[0, -3], img_points[1, -3], 'o-', label='End Effector')
     ax_image.set_aspect('equal')
     ax_image.set_xlabel('u')
     ax_image.set_ylabel('v')
@@ -111,12 +113,8 @@ def render_image(img_points, ax_image):
     ax_image.set_ylim(-1, 1)
 
 
-def project_points(P, X):
-    return P @ X
-
-
 def img_error(img_points):
-    end_effector = img_points[:2, -2]
+    end_effector = img_points[:2, -3]
     target = img_points[:2, -1]
     return end_effector - target
 
@@ -146,7 +144,7 @@ def generate_trajectory(start, stop, num=10):
 def main():
     theta = THETA
     X, img_points_left, img_points_right = get_points(theta, POINT_TARGET)
-    render(X, POINT_TARGET, img_points_left, img_points_right)
+    render(X, POINT_TARGET, POINT_TARGET, img_points_left, img_points_right)
     plt.show()
     plt.close()
 
@@ -154,7 +152,7 @@ def main():
     for target in trajectory.T:
         X, img_points_left, img_points_right, theta = broydens_method(theta, target)
 
-    render(X, POINT_TARGET, img_points_left, img_points_right)
+    render(X, POINT_TARGET, POINT_TARGET, img_points_left, img_points_right)
     plt.show()
 
 
@@ -179,7 +177,7 @@ def broydens_method(theta, target):
             # B = init_jacobian_central_differences(theta)
         e_prev = e
         s_prev = s
-        render(X, POINT_TARGET, img_points_left, img_points_right)
+        render(X, POINT_TARGET, target, img_points_left, img_points_right)
         plt.pause(0.01)
         plt.close()
     return X, img_points_left, img_points_right, theta
@@ -187,7 +185,7 @@ def broydens_method(theta, target):
 
 def get_points(theta, target):
     X = forward_kinematics(theta)
-    points = np.column_stack((X, target))
+    points = np.column_stack((X, POINT_TARGET, target))
     img_points_left = PROJECTION_1 @ points
     img_points_right = PROJECTION_2 @ points
     return X, img_points_left, img_points_right
