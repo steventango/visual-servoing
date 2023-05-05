@@ -2,31 +2,42 @@ services:
   master:
     image: ros:noetic-ros-core
     command: roscore
+    environment:
+      DISPLAY: $DISPLAY
     network_mode: host
-    # restart: always
+    restart: always
+    privileged: true
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ~/.Xauthority:/root/.Xauthority
 
-  camera:
+  # camera:
+  #   build: .
+  #   depends_on:
+  #     - master
+  #   environment:
+  #     DISPLAY: $DISPLAY
+  #   command: roslaunch --wait launch/main.launch
+  #   network_mode: host
+  #   # restart: always
+  #   privileged: true
+  #   volumes:
+  #     - /tmp/.X11-unix:/tmp/.X11-unix
+  #     - ~/.Xauthority:/root/.Xauthority
+  #     - ./visual_servoing:/root/catkin_ws/src/visual_servoing
+  #     - ./launch/main.launch:/root/catkin_ws/launch/main.launch
+
+  cameras:
     build: .
     depends_on:
       - master
     environment:
-      ROS_MASTER_URI: http://master:11311
-    command: roslaunch launch/main.launch
-    network_mode: host
-    # restart: always
-    privileged: true
-    volumes:
-      - ./:/workspace
-    working_dir: /workspace
-
-  dev:
-    build: .
-    depends_on:
-      - master
-    environment:
-      ROS_MASTER_URI: http://master:11311
-    command: /bin/bash
+      DISPLAY: $DISPLAY
+    command: roslaunch --wait cameras.launch
     network_mode: host
     privileged: true
     volumes:
-      - ./visual_servoing:/catkin_ws/src/visual_servoing
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ~/.Xauthority:/root/.Xauthority
+      - ./visual_servoing:/root/catkin_ws/src/visual_servoing
+      - ./launch/cameras.launch:/root/catkin_ws/cameras.launch

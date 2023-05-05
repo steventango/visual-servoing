@@ -1,5 +1,6 @@
 FROM ros:noetic
 
+ENV DEBIAN_FRONTEND=noninteractive
 ENV ROS_DISTRO=noetic
 
 RUN sudo apt update
