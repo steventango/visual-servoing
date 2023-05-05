@@ -1,0 +1,32 @@
+services:
+  master:
+    image: ros:noetic-ros-core
+    command: roscore
+    network_mode: host
+    # restart: always
+
+  camera:
+    build: .
+    depends_on:
+      - master
+    environment:
+      ROS_MASTER_URI: http://master:11311
+    command: roslaunch launch/main.launch
+    network_mode: host
+    # restart: always
+    privileged: true
+    volumes:
+      - ./:/workspace
+    working_dir: /workspace
+
+  dev:
+    build: .
+    depends_on:
+      - master
+    environment:
+      ROS_MASTER_URI: http://master:11311
+    command: /bin/bash
+    network_mode: host
+    privileged: true
+    volumes:
+      - ./visual_servoing:/catkin_ws/src/visual_servoing
