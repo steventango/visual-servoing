@@ -82,14 +82,14 @@ class WAM:
         self.ready = True
 
     def callback_pose(self, message: PoseStamped):
-        self.pose = message
+        self.pose = message.pose
         rospy.loginfo("Pose:")
         rospy.loginfo(self.pose)
         self.enforce_constraints()
 
     def enforce_constraints(self):
-        if 'table' in self.constraints and self.pose.position.z < 0.3:
-            rospy.logerr("Table constraint violated!")
+        if 'table' in self.constraints and self.pose.position.z < -0.2:
+            rospy.logerr("Table constrains violated!")
             self.emergency_stop()
             return
 
