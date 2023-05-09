@@ -3,7 +3,7 @@ import numpy as np
 
 from std_srvs.srv import Empty
 from sensor_msgs.msg import JointState
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import PoseStamped
 from wam_srvs.srv import JointMove
 
 class WAM:
@@ -14,8 +14,8 @@ class WAM:
             self.callback_joint_states
         )
         self.sub_pose = rospy.Subscriber(
-            f'{namespace}/joint_states',
-            Pose,
+            f'{namespace}/pose',
+            PoseStamped,
             self.callback_pose
         )
         rospy.wait_for_service(f'{namespace}/joint_move')
@@ -28,20 +28,22 @@ class WAM:
             f'/{namespace}/go_home',
             Empty
         )
-        self.join_limits = np.array((
+        self.joint_limits = np.array((
             (-2.6, 2.6),
             (-2.0, 2.0),
             (-2.8, 2.8),
-            (-0.9, 3.1),
+            (-0.9, np.pi),
             (-4.76, 1.24),
-            (-1.6, 1.6),
-            (-3.0, 3.0)
+            (-np.pi/2, np.pi/2),
+            (-3.0, 3.0) (3/3), done.
+remote: Total 14 (delta 11), reus
         ))
         self._position = None
         self._velocity = None
         self.dof = None
         self.ready = False
         self.constraints = constraints
+        self.emergency = False
         rospy.on_shutdown(self.on_shutdown)
 
     @property
@@ -54,21 +56,20 @@ class WAM:
 
     def on_shutdown(self):
         rospy.loginfo("On shutdown...")
-        self.go_home()
         self.ready = False
 
     def emergency_stop(self):
         rospy.logwarn("Emergency stop...")
-        self.ready = False
+        self.emergency = True
 
     def callback_joint_states(self, message: JointState):
         self.joint_state = message
         self.dof = len(message.position)
-        self.position = np.array(message.position)
-        self.velocity = np.array(message.velocity)
+        self._position = np.array(message.position)
+        self._velocity = np.array(message.velocity)
         self.ready = True
 
-    def callback_pose(self, message: Pose):
+    def callback_pose(self, message: PoseStamped):
         self.pose = message
         rospy.loginfo("Pose:")
         rospy.loginfo(self.pose)
@@ -76,32 +77,34 @@ class WAM:
 
     def enforce_constraints(self):
         if 'table' in self.constraints and self.pose.position.z < 0.3:
-            rospy.logwarn("Table constraint violated!")
+            rospy.logerr("Table constraint violated!")
             self.emergency_stop()
             return
 
-    def joint_move(self, action):
+    def joint_move(self, action: np.ndarray):
         if not self.ready:
             rospy.logwarn("WAM not ready!")
+            return
+        if self.emergency:
+            rospy.logwarn("WAM in emergency")
             return
         if len(action) != self.dof:
             rospy.logwarn(f"Action must have length {self.dof}!")
             return
-        violated_joint_limits = (
-            action < self.join_limits[:self.dof, 0] |
-            self.join_limits[:self.dof, 1] > action
-        )
+        violated_joint_limit_l = action < self.joint_limits[:self.dof, 0]
+        violated_joint_limit_u = action > self.joint_limits[:self.dof, 1]
+        violated_joint_limits = violated_joint_limit_l | violated_joint_limit_u
         if np.any(violated_joint_limits):
             rospy.logwarn("Joint limits violated!")
+            rospy.logwarn(action)
             rospy.logwarn("Violated joint limits: ")
-            rospy.logwarn(
-                violated_joint_limits,
-                self.join_limits[violated_joint_limits]
-            )
+            rospy.logwarn(violated_joint_limits)
+            violated_joint_limits = np.pad(violated_joint_limits, (0, len(self.joint_limits) - self.dof), 'constant', constant_values=(0, 0))
+            rospy.logwarn(self.joint_limits[violated_joint_limits])
             return
         rospy.loginfo("Joint move...")
         self._joint_move(action)
 
     def go_home(self):
         rospy.loginfo("Go home...")
-        self._go_home(Empty())
+        self._go_home()

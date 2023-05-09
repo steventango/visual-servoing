@@ -52,7 +52,7 @@ class Tracking(Perception):
             if success:
                 for j, box in enumerate(boxes):
                     x, y, w, h = box
-                    state[i, j, :2] = (x + w / 2, y + h / 2)
+                    state[i, j] = (x + w / 2, y + h / 2, 1)
                     x, y, w, h = map(int, (x, y, w, h))
                     cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
             cv.imshow(f"image{i}", image)

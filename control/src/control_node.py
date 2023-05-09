@@ -19,13 +19,12 @@ class ControlNode:
         self.rate = rospy.get_param('~rate')
         self.type = rospy.get_param('~type')
         self.args = rospy.get_param('~args', [])
-        self.wam_namespace = rospy.get_param('~wam_namespace')
 
         self.state = None
 
         self.control_method = CONTROL_METHODS[self.type](self.args)
 
-        self.wam = WAM()
+        self.wam = WAM(rospy.get_param('~wam_namespace'))
         self.sub = rospy.Subscriber(
             '/perception_node/state',
             numpy_msg(Float32MultiArray),
@@ -44,34 +43,35 @@ class ControlNode:
             rate.sleep()
             if self.state is None:
                 rospy.loginfo("Waiting for state...")
-                continue
+            elif np.any(self.state < 0):
+                rospy.loginfo("Lost tracking...")
             elif not self.wam.ready:
                 rospy.loginfo("Waiting for WAM...")
-                continue
             else:
                 break
+            self.wam.emergency = True
+        rospy.loginfo("Ready...")
+        self.wam.emergency = False
 
     def run(self):
-        self.wait_initialization()
-
         rate = rospy.Rate(self.rate)
-
+        done = False
         while not rospy.is_shutdown():
             rate.sleep()
-            if np.any(self.state < 0):
-                rospy.loginfo("Lost tracking...")
-                self.wam.emergency_stop()
-                self.wait_initialization()
-                continue
+            self.wait_initialization()
             action = self.wam.position
             action[1] += 0.1
             action[1] = np.clip(action[1], -2.6, 2.6)
             action[1] = min(action[1], 0)
             if action[1] == 0:
+                done = True
                 break
-            rospy.loginfo(f"action: {action}")
+            rospy.loginfo(f"Action: {action}")
             self.wam.joint_move(action)
-        self.wam.go_home()
+        if done:
+            self.wam.go_home()
+            rospy.loginfo("Done!")
+
 
 def main():
     rospy.init_node('control_node')

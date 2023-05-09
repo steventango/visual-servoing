@@ -8,5 +8,6 @@
       <param name="rate" value="$(arg rate)"></param>
       <param name="type" value="$(arg type)"></param>
       <rosparam param="args" subst_value="True">$(arg args)</rosparam>
+      <param name="wam_namespace" value="$(arg wam_namespace)"></param>
   </node>
 </launch>
