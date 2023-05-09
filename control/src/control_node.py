@@ -3,6 +3,7 @@ import rospy
 from std_msgs.msg import Float32MultiArray
 from rospy.numpy_msg import numpy_msg
 import numpy as np
+import numpy.linalg as la
 from control import ControlMethod
 from visual_servoing import VisualServoing
 from typing import Dict
@@ -60,12 +61,11 @@ class ControlNode:
             rate.sleep()
             self.wait_initialization()
             action = self.wam.position
-            action[1] += 0.1
-            action[1] = np.clip(action[1], -2.6, 2.6)
-            action[1] = min(action[1], 0)
-            if action[1] == 0:
+            if la.norm(self.wam.position - self.wam.ready_position) < 0.1:
                 done = True
                 break
+            trajectory = np.linspace(self.wam.position, self.wam.ready_position, 10)
+            action = trajectory[1]
             rospy.loginfo(f"Action: {action}")
             self.wam.joint_move(action)
         if done:

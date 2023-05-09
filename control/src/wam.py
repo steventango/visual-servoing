@@ -35,9 +35,17 @@ class WAM:
             (-0.9, np.pi),
             (-4.76, 1.24),
             (-np.pi/2, np.pi/2),
-            (-3.0, 3.0) (3/3), done.
-remote: Total 14 (delta 11), reus
+            (-3.0, 3.0)
         ))
+        self._ready_position = np.array([
+            0.002227924477643431,
+            -0.1490540623980915,
+            -0.04214558734519736,
+            1.6803055108189549,
+            0.06452207850075688,
+            -0.06341508205589094,
+            0.01366506663019359,
+        ])
         self._position = None
         self._velocity = None
         self.dof = None
@@ -53,6 +61,10 @@ remote: Total 14 (delta 11), reus
     @property
     def velocity(self):
         return self._velocity.copy()
+
+    @property
+    def ready_position(self):
+        return self._ready_position[:self.dof].copy()
 
     def on_shutdown(self):
         rospy.loginfo("On shutdown...")
