@@ -56,3 +56,19 @@ services:
       - ~/.Xauthority:/root/.Xauthority
       - ./perception:/root/catkin_ws/src/perception
       - ./launch/perception.launch:/root/catkin_ws/perception.launch
+
+  control:
+    build: .
+    depends_on:
+      - master
+    environment:
+      DISPLAY: $DISPLAY
+      PYTHONUNBUFFERED: 1
+    command: roslaunch --wait control.launch
+    network_mode: host
+    privileged: true
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ~/.Xauthority:/root/.Xauthority
+      - ./control:/root/catkin_ws/src/control
+      - ./launch/control.launch:/root/catkin_ws/control.launch

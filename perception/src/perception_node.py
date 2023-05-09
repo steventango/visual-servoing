@@ -2,8 +2,7 @@
 from cv_bridge import CvBridge
 import rospy
 from sensor_msgs.msg import CameraInfo, CompressedImage
-from std_msgs.msg import Float32MultiArray
-from rospy.numpy_msg import numpy_msg
+from std_msgs.msg import Float32MultiArray, MultiArrayDimension
 import numpy as np
 import message_filters
 from perception import Perception
@@ -26,7 +25,7 @@ class PerceptionNode:
 
         self.pub = rospy.Publisher(
             f"~state",
-            numpy_msg(Float32MultiArray),
+           Float32MultiArray,
             queue_size=1
         )
         self.subs = (message_filters.Subscriber(
@@ -45,6 +44,20 @@ class PerceptionNode:
             for compressed in compresseds
         ]
 
+    def publish_state(self, state):
+        message = Float32MultiArray()
+        message.data = state.flatten()
+        message.layout.dim = []
+        stride = state.size
+        for i, s in enumerate(state.shape):
+            dim = MultiArrayDimension()
+            dim.label = str(i)
+            dim.size = s
+            dim.stride = stride
+            message.layout.dim.append(dim)
+            stride //= s
+        self.pub.publish(message)
+
     def run(self):
         rate = rospy.Rate(self.rate)
 
@@ -53,7 +66,7 @@ class PerceptionNode:
             if self.raw_images is None:
                 continue
             state = self.perception.get_state(self.raw_images)
-            rospy.loginfo_throttle(1, f"\n{state}")
+            self.publish_state(state)
             
 
 

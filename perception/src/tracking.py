@@ -33,7 +33,7 @@ class Tracking(Perception):
                 rois = cv.selectROIs(
                     f"image{i}", image, fromCenter=False, showCrosshair=True
                 )
-                if len(rois) < self.n:
+                if len(rois) != self.n:
                     print(f"Please select {self.n} objects.")
             for roi in rois:
                 tracker = TRACKERS[self.type]()
