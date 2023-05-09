@@ -22,7 +22,7 @@ class Tracking(Perception):
         self.objs = ["end_effector", "target"]
         self.n = len(self.objs)
         self.trackerss = None
-        
+
 
     def initialize_trackers(self, images):
         self.trackerss = [cv.MultiTracker_create() for _ in range(self.m)]
@@ -39,13 +39,13 @@ class Tracking(Perception):
                 tracker = TRACKERS[self.type]()
                 trackers.add(tracker, image, tuple(roi))
         self.initialized = True
-            
+
 
     def get_state(self, images):
         if not self.initialized:
             self.initialize_trackers(images)
 
-        state = np.ones((self.m, self.n, 3))
+        state = np.full((self.m, self.n, 3), -1)
 
         for i, (image, trackers) in enumerate(zip(images, self.trackerss)):
             (success, boxes) = trackers.update(image)
@@ -60,6 +60,3 @@ class Tracking(Perception):
         if (key == ord('r')):
             self.initialized = False
         return state
-
-        
-
