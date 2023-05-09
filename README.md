@@ -3,6 +3,6 @@
 
 # Usage
 ```bash
-xhost +
+xhost + local:docker
 docker compose up
 ```

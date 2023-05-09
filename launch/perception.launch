@@ -1,0 +1,11 @@
+<launch>
+  <arg name="rate" default="30" />
+  <arg name="type" default="tracking" />
+  <arg name="args" default="[csrt]" />
+
+  <node name="perception_node" pkg="perception" type="perception_node.py" output="screen" >
+      <param name="rate" value="$(arg rate)"></param>
+      <param name="type" value="$(arg type)"></param>
+      <rosparam param="args" subst_value="True">$(arg args)</rosparam>
+  </node>
+</launch>
