@@ -61,6 +61,7 @@ class ControlNode:
             if np.any(self.state < 0):
                 rospy.loginfo("Lost tracking...")
                 self.wam.emergency_stop()
+                self.wait_initialization()
                 continue
             action = self.wam.position
             action[1] += 0.1

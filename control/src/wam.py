@@ -3,14 +3,20 @@ import numpy as np
 
 from std_srvs.srv import Empty
 from sensor_msgs.msg import JointState
+from geometry_msgs.msg import Pose
 from wam_srvs.srv import JointMove
 
 class WAM:
-    def __init__(self, namespace):
-        self.sub_wam_joint_states = rospy.Subscriber(
+    def __init__(self, namespace, constraints={'table'}):
+        self.sub_joint_states = rospy.Subscriber(
             f'{namespace}/joint_states',
             JointState,
             self.callback_joint_states
+        )
+        self.sub_pose = rospy.Subscriber(
+            f'{namespace}/joint_states',
+            Pose,
+            self.callback_pose
         )
         rospy.wait_for_service(f'{namespace}/joint_move')
         self._joint_move = rospy.ServiceProxy(
@@ -35,6 +41,7 @@ class WAM:
         self._velocity = None
         self.dof = None
         self.ready = False
+        self.constraints = constraints
         rospy.on_shutdown(self.on_shutdown)
 
     @property
@@ -60,6 +67,18 @@ class WAM:
         self.position = np.array(message.position)
         self.velocity = np.array(message.velocity)
         self.ready = True
+
+    def callback_pose(self, message: Pose):
+        self.pose = message
+        rospy.loginfo("Pose:")
+        rospy.loginfo(self.pose)
+        self.enforce_constraints()
+
+    def enforce_constraints(self):
+        if 'table' in self.constraints and self.pose.position.z < 0.3:
+            rospy.logwarn("Table constraint violated!")
+            self.emergency_stop()
+            return
 
     def joint_move(self, action):
         if not self.ready:
