@@ -19,6 +19,7 @@ class ControlNode:
         self.rate = rospy.get_param('~rate')
         self.type = rospy.get_param('~type')
         self.args = rospy.get_param('~args', [])
+        self.wam_namespace = rospy.get_param('~wam_namespace')
 
         self.state = None
 

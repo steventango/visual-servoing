@@ -8,16 +8,16 @@ from wam_srvs.srv import JointMove
 class WAM:
     def __init__(self, namespace):
         self.sub_wam_joint_states = rospy.Subscriber(
-            f'/{namespace}/joint_states',
+            f'{namespace}/joint_states',
             JointState,
             self.callback_joint_states
         )
-        rospy.wait_for_service(f'/{namespace}/joint_move')
+        rospy.wait_for_service(f'{namespace}/joint_move')
         self._joint_move = rospy.ServiceProxy(
             f'/{namespace}/joint_move',
             JointMove
         )
-        rospy.wait_for_service(f'/{namespace}/go_home')
+        rospy.wait_for_service(f'{namespace}/go_home')
         self._go_home = rospy.ServiceProxy(
             f'/{namespace}/go_home',
             Empty

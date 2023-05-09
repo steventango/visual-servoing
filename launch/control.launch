@@ -2,6 +2,7 @@
   <arg name="rate" default="30" />
   <arg name="type" default="visual_servoing" />
   <arg name="args" default="[]" />
+  <arg name="wam_namespace" default="/wam" />
 
   <node name="control_node" pkg="control" type="control_node.py" output="screen" >
       <param name="rate" value="$(arg rate)"></param>
