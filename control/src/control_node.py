@@ -5,6 +5,7 @@ from rospy.numpy_msg import numpy_msg
 import numpy as np
 from control import ControlMethod
 from visual_servoing import VisualServoing
+from wam_srvs import JointMove, JointMoveRequest
 from typing import Dict
 
 CONTROL_METHODS: Dict[str, ControlMethod] = {
@@ -19,13 +20,13 @@ class ControlNode:
 
         self.state = None
 
-        self.control = CONTROL_METHODS[self.type](self.args)
+        self.control_method = CONTROL_METHODS[self.type](self.args)
 
-        # self.pub = rospy.Publisher(
-        #     f"wam_common/?",
-        #     numpy_msg(Float32MultiArray),
-        #     queue_size=1
-        # )
+        rospy.wait_for_service('joint_move')
+        self.joint_move = rospy.ServiceProxy(
+            'joint_move',
+            JointMove
+        )
         self.sub = rospy.Subscriber(
             '/perception_node/state',
             numpy_msg(Float32MultiArray),
@@ -45,7 +46,8 @@ class ControlNode:
             if self.state is None:
                 continue
             rospy.loginfo_throttle(10, self.state)
-            
+            action = self.control_method(self.state)
+            self.joint_move(action)
 
 def main():
     rospy.init_node('control_node')

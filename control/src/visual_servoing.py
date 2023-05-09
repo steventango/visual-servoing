@@ -8,5 +8,5 @@ class VisualServoing(ControlMethod):
         super().__init__(args)  
 
 
-    def get_action(self, state):
-        return None
+    def get_action(self, state: np.ndarray):
+        return np.zeros(7)

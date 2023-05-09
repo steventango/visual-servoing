@@ -16,6 +16,7 @@ RUN mkdir -p /root/catkin_ws/src
 WORKDIR /root/catkin_ws
 COPY control  src/control
 COPY perception src/perception
+COPY wam_common src/wam_common
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && catkin_make && . devel/setup.sh
 

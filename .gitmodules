@@ -1,0 +1,3 @@
+[submodule "wam_common"]
+	path = wam_common
+	url = https://github.com/ualberta-robotics/wam_common
