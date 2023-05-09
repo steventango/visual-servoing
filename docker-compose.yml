@@ -11,33 +11,32 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ~/.Xauthority:/root/.Xauthority
 
-  # camera:
-  #   build: .
-  #   depends_on:
-  #     - master
-  #   environment:
-  #     DISPLAY: $DISPLAY
-  #   command: roslaunch --wait launch/main.launch
-  #   network_mode: host
-  #   # restart: always
-  #   privileged: true
-  #   volumes:
-  #     - /tmp/.X11-unix:/tmp/.X11-unix
-  #     - ~/.Xauthority:/root/.Xauthority
-  #     - ./visual_servoing:/root/catkin_ws/src/visual_servoing
-  #     - ./launch/main.launch:/root/catkin_ws/launch/main.launch
-
-  cameras:
+  cam0:
     build: .
     depends_on:
       - master
     environment:
       DISPLAY: $DISPLAY
-    command: roslaunch --wait cameras.launch
+    command: roslaunch --wait camera.launch name:=cam0 video_device:=/dev/video2
     network_mode: host
     privileged: true
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ~/.Xauthority:/root/.Xauthority
       - ./visual_servoing:/root/catkin_ws/src/visual_servoing
-      - ./launch/cameras.launch:/root/catkin_ws/cameras.launch
+      - ./launch/camera.launch:/root/catkin_ws/camera.launch
+
+  cam1:
+    build: .
+    depends_on:
+      - master
+    environment:
+      DISPLAY: $DISPLAY
+    command: roslaunch --wait camera.launch name:=cam1 video_device:=/dev/video4
+    network_mode: host
+    privileged: true
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ~/.Xauthority:/root/.Xauthority
+      - ./visual_servoing:/root/catkin_ws/src/visual_servoing
+      - ./launch/camera.launch:/root/catkin_ws/camera.launch

@@ -1,0 +1,11 @@
+<launch>
+  <arg name="name"/>
+  <arg name="video_device"/>
+
+  <node name="$(arg name)" pkg="usb_cam" type="usb_cam_node" output="screen" >
+      <param name="video_device" value="$(arg video_device)"></param> 
+      <param name="pixel_format" value="yuyv"></param>
+      <param name="framerate" value="15"></param> 
+      <param name="io_method" value="mmap"></param>
+  </node>
+</launch>
