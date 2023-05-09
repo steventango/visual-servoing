@@ -37,12 +37,21 @@ class ControlNode:
         state = state.reshape([dim.size for dim in message.layout.dim])
         self.state = state
 
-    def run(self):
-        wait_rate = rospy.Rate(1)
+    def wait_initialization(self):
+        rate = rospy.Rate(1)
         while not rospy.is_shutdown():
-            if self.state is not None and self.wam.ready:
+            rate.sleep()
+            if self.state is None:
+                rospy.loginfo("Waiting for state...")
+                continue
+            elif not self.wam.ready:
+                rospy.loginfo("Waiting for WAM...")
+                continue
+            else:
                 break
-            wait_rate.sleep()
+
+    def run(self):
+        self.wait_initialization()
 
         rate = rospy.Rate(self.rate)
 
