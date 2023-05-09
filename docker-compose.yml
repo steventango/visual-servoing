@@ -23,7 +23,6 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ~/.Xauthority:/root/.Xauthority
-      - ./visual_servoing:/root/catkin_ws/src/visual_servoing
       - ./launch/camera.launch:/root/catkin_ws/camera.launch
 
   cam1:
@@ -38,7 +37,6 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ~/.Xauthority:/root/.Xauthority
-      - ./visual_servoing:/root/catkin_ws/src/visual_servoing
       - ./launch/camera.launch:/root/catkin_ws/camera.launch
 
   perception:
