@@ -38,9 +38,9 @@ class WAM:
             (-3.0, 3.0)
         ))
         self._ready_position = np.array([
-            0.002227924477643431,
-            -0.1490540623980915,
-            -0.04214558734519736,
+            0.004784559124119499,
+            0.4490540623980915,
+            -0.0726144751661842,
             1.6803055108189549,
             0.06452207850075688,
             -0.06341508205589094,
@@ -83,8 +83,8 @@ class WAM:
 
     def callback_pose(self, message: PoseStamped):
         self.pose = message.pose
-        rospy.loginfo("Pose:")
-        rospy.loginfo(self.pose)
+        rospy.loginfo_throttle(10, "Pose:")
+        rospy.loginfo_throttle(10, self.pose)
         self.enforce_constraints()
 
     def enforce_constraints(self):

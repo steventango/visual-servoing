@@ -35,6 +35,7 @@ class Tracking(Perception):
                 )
                 if len(rois) != self.n:
                     print(f"Please select {self.n} objects.")
+                    rois = []
             for roi in rois:
                 tracker = TRACKERS[self.type]()
                 trackers.add(tracker, image, tuple(roi))

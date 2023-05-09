@@ -54,20 +54,37 @@ class ControlNode:
         rospy.loginfo("Ready...")
         self.wam.emergency = False
 
+    def move_wam_to_ready_position(self):
+        rospy.loginfo("Moving WAM to ready position...")
+        rate = rospy.Rate(self.rate)
+        while not rospy.is_shutdown():
+            rate.sleep()
+            if not self.wam.ready:
+                rospy.loginfo("Waiting for WAM...")
+                continue
+            break
+        
+        steps = 8
+        trajectory = np.linspace(self.wam.position, self.wam.ready_position, steps)
+        for action in trajectory:
+            rospy.loginfo(f"Action: {action}")
+            self.wam.joint_move(self.wam.ready_position)
+            rate.sleep()
+
+
     def run(self):
+        self.move_wam_to_ready_position()
+
         rate = rospy.Rate(self.rate)
         done = False
         while not rospy.is_shutdown():
             rate.sleep()
             self.wait_initialization()
-            action = self.wam.position
-            if la.norm(self.wam.position - self.wam.ready_position) < 0.1:
-                done = True
-                break
-            trajectory = np.linspace(self.wam.position, self.wam.ready_position, 10)
-            action = trajectory[1]
-            rospy.loginfo(f"Action: {action}")
-            self.wam.joint_move(action)
+            # TODO: actually do VS
+            # action = self.control_method(self.state)
+            # self.wam.joint_move(action)
+            done = True
+            break
         if done:
             self.wam.go_home()
             rospy.loginfo("Done!")
