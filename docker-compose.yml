@@ -3,11 +3,13 @@ services:
     image: ros:noetic-ros-core
     command: roscore
     environment:
+      # Enable GUI via X11 forwarding
       DISPLAY: $DISPLAY
     network_mode: host
     restart: always
     privileged: true
     volumes:
+      # Enable GUI via X11 forwarding
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ~/.Xauthority:/root/.Xauthority
 
@@ -16,13 +18,16 @@ services:
     depends_on:
       - master
     environment:
+      # Enable GUI via X11 forwarding
       DISPLAY: $DISPLAY
     command: roslaunch --wait camera.launch name:=cam0 video_device:=/dev/video0
     network_mode: host
     privileged: true
     volumes:
+      # Enable GUI via X11 forwarding
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ~/.Xauthority:/root/.Xauthority
+      # Mount code for fast development
       - ./launch/camera.launch:/root/catkin_ws/camera.launch
 
   cam1:
@@ -30,13 +35,16 @@ services:
     depends_on:
       - master
     environment:
+      # Enable GUI via X11 forwarding
       DISPLAY: $DISPLAY
     command: roslaunch --wait camera.launch name:=cam1 video_device:=/dev/video2
     network_mode: host
     privileged: true
     volumes:
+      # Enable GUI via X11 forwarding
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ~/.Xauthority:/root/.Xauthority
+      # Mount code for fast development
       - ./launch/camera.launch:/root/catkin_ws/camera.launch
 
   perception:
@@ -44,16 +52,20 @@ services:
     depends_on:
       - master
     environment:
+      # Enable GUI via X11 forwarding
       DISPLAY: $DISPLAY
       PYTHONUNBUFFERED: 1
     command: roslaunch --wait perception.launch record:=true
     network_mode: host
     privileged: true
     volumes:
+      # Enable GUI via X11 forwarding
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ~/.Xauthority:/root/.Xauthority
+      # Mount code for fast development
       - ./perception:/root/catkin_ws/src/perception
       - ./launch/perception.launch:/root/catkin_ws/perception.launch
+      # Mount video file for recording
       - perception.avi:/root/catkin_ws/perception.avi
 
   control:
@@ -67,7 +79,9 @@ services:
     network_mode: host
     privileged: true
     volumes:
+      # Enable GUI via X11 forwarding
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ~/.Xauthority:/root/.Xauthority
+      # Mount code for fast development
       - ./control:/root/catkin_ws/src/control
       - ./launch/control.launch:/root/catkin_ws/control.launch
