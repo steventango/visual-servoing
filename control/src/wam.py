@@ -4,7 +4,7 @@ import numpy as np
 from std_srvs.srv import Empty
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import PoseStamped
-from wam_srvs.srv import JointMove
+from wam_srvs.srv import JointMoveBlock
 
 
 class WAM:
@@ -19,10 +19,10 @@ class WAM:
             PoseStamped,
             self.callback_pose
         )
-        rospy.wait_for_service(f'{namespace}/joint_move')
+        rospy.wait_for_service(f'{namespace}/joint_move_block')
         self._joint_move = rospy.ServiceProxy(
-            f'/{namespace}/joint_move',
-            JointMove
+            f'/{namespace}/joint_move_block',
+            JointMoveBlock
         )
         rospy.wait_for_service(f'{namespace}/go_home')
         self._go_home = rospy.ServiceProxy(
@@ -116,7 +116,7 @@ class WAM:
             rospy.logwarn(self.joint_limits[violated_joint_limits])
             return
         rospy.loginfo("Joint move...")
-        self._joint_move(action)
+        self._joint_move(action, True)
 
     def go_home(self):
         rospy.loginfo("Go home...")

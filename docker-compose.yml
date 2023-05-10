@@ -62,7 +62,7 @@ services:
     environment:
       DISPLAY: $DISPLAY
       PYTHONUNBUFFERED: 1
-    command: roslaunch --wait control.launch rate:=0.2
+    command: roslaunch --wait control.launch rate:=1
     network_mode: host
     privileged: true
     volumes:

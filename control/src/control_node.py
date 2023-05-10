@@ -83,12 +83,7 @@ class ControlNode:
             if action is None:
                 continue
             rospy.loginfo(f"Position: {self.wam.position}")
-            rospy.loginfo(f"Action: {action}")
-            rospy.loginfo(f"Update: {action - self.wam.position}")
-            B = self.control_method.B 
-            rospy.loginfo(f"B: {B}")
-            rospy.loginfo(f"cond: {la.cond(B)}")
-            input("Press key to move...")
+            # input("Press key to move...")
             self.wam.joint_move(action)
         if done:
             rospy.loginfo("Done!")

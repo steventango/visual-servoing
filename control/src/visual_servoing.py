@@ -12,9 +12,9 @@ class VisualServoing(ControlMethod):
         self.initialized = False
         self.B = None
         self.max_updates = 20
-        self.epsilon = 35
+        self.epsilon = 30
         self.alpha = 0.1
-        self.beta = 0.1
+        self.beta = 0.5
         self.error_prev = None
         self.update_prev = None
         self.active_joints = None
@@ -34,12 +34,12 @@ class VisualServoing(ControlMethod):
         for i, joint in enumerate(wam.active_joints):   
             action[joint] += delta
             wam.joint_move(action)
-            rospy.sleep(2.5)
+            rospy.sleep(1)
             state_one = control_node.state.copy()
             error_one = self.get_error(state_one)
             action[joint] -= 2 * delta
             wam.joint_move(action)
-            rospy.sleep(2.5)
+            rospy.sleep(1)
             state_two = control_node.state.copy()
             error_two = self.get_error(state_two)
             J[:, i] = (error_one - error_two) / (2 * delta)
@@ -62,16 +62,25 @@ class VisualServoing(ControlMethod):
 
 
     def broydens_step(self, state: np.ndarray, action: np.ndarray):
+        rospy.loginfo(f"B: {np.array2string(self.B, precision=4, floatmode='fixed')}")
+        rospy.loginfo(f"cond: {la.cond(self.B):.4f}")
         error = self.get_error(state)
-        rospy.loginfo(f"error: {la.norm(error):.2f}")
+        rospy.loginfo(f"Error: {la.norm(error):.2f}")
         if la.norm(error) < self.epsilon:
             return None, True
         try:
-            update = la.lstsq(self.B, -error, rcond=None)[0]
+            update = self.alpha * la.lstsq(self.B, -error, rcond=None)[0]
         except la.LinAlgError:
+            rospy.logwarn("LA error")
+            return None, False
+        
+        rospy.loginfo(f"Update: {np.array2string(update, precision=4, floatmode='fixed')}")
+        if la.norm(update) > 1:
+            rospy.logwarn("big update error")
             return None, False
         for joint, joint_update in zip(self.active_joints, update):
-            action[joint] += self.alpha * joint_update
+            action[joint] += joint_update
+        rospy.loginfo(f"Action: {np.array2string(action, precision=4, floatmode='fixed')}")
         if self.error_prev is not None:
             y = error - self.error_prev
             self.B += self.beta * np.outer(y - self.B @ self.update_prev, self.update_prev.T) / (self.update_prev.T @ self.update_prev)
