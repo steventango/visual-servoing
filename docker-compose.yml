@@ -17,13 +17,12 @@ services:
       - master
     environment:
       DISPLAY: $DISPLAY
-    command: roslaunch --wait camera.launch name:=cam0 video_device:=/dev/video2
+    command: roslaunch --wait camera.launch name:=cam0 video_device:=/dev/video0
     network_mode: host
     privileged: true
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ~/.Xauthority:/root/.Xauthority
-      - ./visual_servoing:/root/catkin_ws/src/visual_servoing
       - ./launch/camera.launch:/root/catkin_ws/camera.launch
 
   cam1:
@@ -32,13 +31,12 @@ services:
       - master
     environment:
       DISPLAY: $DISPLAY
-    command: roslaunch --wait camera.launch name:=cam1 video_device:=/dev/video4
+    command: roslaunch --wait camera.launch name:=cam1 video_device:=/dev/video2
     network_mode: host
     privileged: true
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ~/.Xauthority:/root/.Xauthority
-      - ./visual_servoing:/root/catkin_ws/src/visual_servoing
       - ./launch/camera.launch:/root/catkin_ws/camera.launch
 
   perception:
@@ -64,7 +62,7 @@ services:
     environment:
       DISPLAY: $DISPLAY
       PYTHONUNBUFFERED: 1
-    command: roslaunch --wait control.launch
+    command: roslaunch --wait control.launch rate:=0.2
     network_mode: host
     privileged: true
     volumes:
