@@ -18,6 +18,3 @@ RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc \
     && echo "source $WS/devel/setup.bash" >> ~/.bashrc
 
 RUN sed --in-place --expression '$isource "$WS/devel/setup.bash"' /ros_entrypoint.sh
-
-# COPY ./entrypoint.sh /
-# ENTRYPOINT ["/entrypoint.sh"]
