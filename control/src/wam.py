@@ -84,8 +84,7 @@ class WAM:
 
     def callback_pose(self, message: PoseStamped):
         self.pose = message.pose
-        rospy.loginfo_throttle(10, "Pose:")
-        rospy.loginfo_throttle(10, self.pose)
+        rospy.loginfo_throttle(10, self.pose.position.z)
         self.enforce_constraints()
 
     def enforce_constraints(self):

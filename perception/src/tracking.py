@@ -26,6 +26,11 @@ class Tracking(Perception):
 
     def initialize_trackers(self, images):
         self.trackerss = [cv.MultiTracker_create() for _ in range(self.m)]
+        print("Press i to initialize trackers.")
+        cv.imshow(f"image0", images[0])
+        key = cv.waitKey()
+        if key != ord('i'):
+            return
         for i, (image, trackers) in enumerate(zip(images, self.trackerss)):
             print(f"Click the top left and then the bottom right to initalize {' then '.join(self.objs)}. Press ESC when done.")
             rois = []
@@ -44,7 +49,8 @@ class Tracking(Perception):
 
     def get_state(self, images):
         if not self.initialized:
-            self.initialize_trackers(images)
+            if not self.initialize_trackers(images):
+                return
 
         state = np.full((self.m, self.n, 3), -1)
 

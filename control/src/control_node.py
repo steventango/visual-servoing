@@ -70,7 +70,7 @@ class ControlNode:
             if la.norm(self.wam.position - self.wam.ready_position) < 1e-2:
                 break
             rospy.loginfo(f"Action: {action}")
-            self.wam.joint_move(self.wam.ready_position)
+            self.wam.joint_move(action)
             rate.sleep()
         rospy.loginfo("WAM in ready position!")
 
@@ -84,6 +84,7 @@ class ControlNode:
             rate.sleep()
             self.wait_initialization()
             self.control_method.initialize(self.wam, self)
+            rospy.loginfo(f"B: {self.control_method.B}")
             # action = self.control_method.get_action(self.state)
             # self.wam.joint_move(action)
             done = True

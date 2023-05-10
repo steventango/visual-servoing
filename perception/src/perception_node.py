@@ -66,6 +66,8 @@ class PerceptionNode:
             if self.raw_images is None:
                 continue
             state = self.perception.get_state(self.raw_images)
+            if state is None:
+                continue
             self.publish_state(state)
             
 
