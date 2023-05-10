@@ -5,8 +5,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update
 RUN apt-get install -y ros-${ROS_DISTRO}-cv-bridge ros-${ROS_DISTRO}-image-transport ros-${ROS_DISTRO}-usb-cam
 
-RUN mkdir -p /root/catkin_ws/src
-WORKDIR /root/catkin_ws
+ENV WS=/root/catkin_ws
+RUN mkdir -p ${WS}/src
+WORKDIR ${WS}
 COPY control  src/control
 COPY perception src/perception
 COPY wam_common src/wam_common
@@ -14,7 +15,9 @@ COPY wam_common src/wam_common
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && catkin_make && . devel/setup.sh
 
 RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc \
-    && echo "source /root/catkin_ws/devel/setup.bash" >> ~/.bashrc
+    && echo "source $WS/devel/setup.bash" >> ~/.bashrc
+
+RUN sed --in-place --expression '$isource "$WS/devel/setup.bash"' /ros_entrypoint.sh
 
 # COPY ./entrypoint.sh /
 # ENTRYPOINT ["/entrypoint.sh"]
