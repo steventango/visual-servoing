@@ -65,8 +65,8 @@ services:
       # Mount code for fast development
       - ./perception:/root/catkin_ws/src/perception
       - ./launch/perception.launch:/root/catkin_ws/perception.launch
-      # Mount video file for recording
-      - perception.avi:/root/catkin_ws/perception.avi
+      # Mount data directory for recording
+      - ./data:/root/catkin_ws/data
 
   control:
     build: .

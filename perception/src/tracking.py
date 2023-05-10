@@ -35,12 +35,12 @@ class Tracking(Perception):
 
 
     def initialize_trackers(self, images):
-        for i, image in enumerate(images):
-            print("Press i to initialize trackers.")
+        for i, image in enumerate(images):    
             cv.imshow(f"image{i}", image)
-            key = cv.waitKey()
-            if key != ord('i'):
-                return
+        print("Press i to initialize trackers.")
+        key = cv.waitKey(1)
+        if key != ord('i'):
+            return
         self.trackerss = [cv.MultiTracker_create() for _ in range(self.m)]
         for i, (image, trackers) in enumerate(zip(images, self.trackerss)):
             print(f"Click the top left and then the bottom right to initalize {' then '.join(self.objs)}. Press ESC when done.")
@@ -61,7 +61,7 @@ class Tracking(Perception):
     def get_state(self, images):
         if not self.initialized:
             if not self.initialize_trackers(images):
-                return
+                return None, None
 
         state = np.full((self.m, self.n, 3), -1)
 
@@ -77,16 +77,16 @@ class Tracking(Perception):
                     cv.rectangle(image, (x, y), (x + w, y + h), color, 2)
                     point = state[i, j, :2].astype(int)
                     points.append(point)
-                    cv.circle(image, point, 2, color, 2)
+                    cv.circle(image, tuple(point), 2, color, 2)
                 color = COLORS[len(boxes) % len(COLORS)]
                 for j in range(len(points) - 1):
-                    cv.line(image, points[j], points[j + 1], color, 2)
+                    cv.line( image, tuple(points[j]), tuple(points[j + 1]), color, 2)
                     distance = la.norm(points[j] - points[j + 1])
                     centroid = np.mean([points[j], points[j + 1]], axis=0).astype(int)
                     cv.putText(
                         image,
                         f"{distance:.2f}",
-                        centroid,
+                        tuple(centroid),
                         cv.FONT_HERSHEY_SIMPLEX,
                         1,
                         color,
@@ -97,4 +97,4 @@ class Tracking(Perception):
         key = cv.waitKey(1)
         if (key == ord('r')):
             self.initialized = False
-        return state
+        return state, images

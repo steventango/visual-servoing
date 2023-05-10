@@ -24,11 +24,14 @@ class PerceptionNode:
 
         self.bridge = CvBridge()
         self.raw_images = None
-        self.writer = cv.VideoWriter(
-            "perception.avi",
-            cv.VideoWriter_fourcc(*"MJPG"),
-            self.rate,
-            (640, self.m * 480)
+        self.writer = None
+        if self.record:
+            self.writer = cv.VideoWriter(
+                "/root/catkin_ws/data/perception.avi",
+                cv.VideoWriter_fourcc(*"MJPG"),
+                self.rate,
+                (640, self.m * 480)
+        
         )
         self.perception = PERCEPTION_METHODS[self.type](self.args)
 
@@ -79,7 +82,7 @@ class PerceptionNode:
             if self.raw_images is None:
                 continue
             state, images = self.perception.get_state(self.raw_images)
-            if self.record:
+            if images is not None and self.record:
                 self.writer.write(np.vstack(images))
             if state is None:
                 continue
