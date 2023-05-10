@@ -2,6 +2,7 @@ from typing import List
 from perception import Perception
 import cv2 as cv
 import numpy as np
+import numpy.linalg as la
 
 TRACKERS = {
     "csrt": cv.TrackerCSRT_create,
@@ -12,6 +13,15 @@ TRACKERS = {
     "medianflow": cv.TrackerMedianFlow_create,
     "mosse": cv.TrackerMOSSE_create
 }
+
+COLORS = [
+    (0, 0, 255),
+    (0, 255, 0),
+    (255, 0, 0),
+    (255, 255, 0),
+    (255, 0, 255),
+    (0, 255, 255)
+]
 
 class Tracking(Perception):
     def __init__(self, args: List[str]):
@@ -25,12 +35,13 @@ class Tracking(Perception):
 
 
     def initialize_trackers(self, images):
+        for i, image in enumerate(images):
+            print("Press i to initialize trackers.")
+            cv.imshow(f"image{i}", image)
+            key = cv.waitKey()
+            if key != ord('i'):
+                return
         self.trackerss = [cv.MultiTracker_create() for _ in range(self.m)]
-        print("Press i to initialize trackers.")
-        cv.imshow(f"image0", images[0])
-        key = cv.waitKey()
-        if key != ord('i'):
-            return
         for i, (image, trackers) in enumerate(zip(images, self.trackerss)):
             print(f"Click the top left and then the bottom right to initalize {' then '.join(self.objs)}. Press ESC when done.")
             rois = []
@@ -57,12 +68,32 @@ class Tracking(Perception):
         for i, (image, trackers) in enumerate(zip(images, self.trackerss)):
             (success, boxes) = trackers.update(image)
             if success:
+                points = []
                 for j, box in enumerate(boxes):
+                    color = COLORS[j % len(COLORS)]
                     x, y, w, h = box
                     state[i, j] = (x + w / 2, y + h / 2, 1)
                     x, y, w, h = map(int, (x, y, w, h))
-                    cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                    cv.rectangle(image, (x, y), (x + w, y + h), color, 2)
+                    point = state[i, j, :2].astype(int)
+                    points.append(point)
+                    cv.circle(image, point, 2, color, 2)
+                color = COLORS[len(boxes) % len(COLORS)]
+                for j in range(len(points) - 1):
+                    cv.line(image, points[j], points[j + 1], color, 2)
+                    distance = la.norm(points[j] - points[j + 1])
+                    centroid = np.mean([points[j], points[j + 1]], axis=0).astype(int)
+                    cv.putText(
+                        image,
+                        f"{distance:.2f}",
+                        centroid,
+                        cv.FONT_HERSHEY_SIMPLEX,
+                        1,
+                        color,
+                        2
+                    )
             cv.imshow(f"image{i}", image)
+
         key = cv.waitKey(1)
         if (key == ord('r')):
             self.initialized = False

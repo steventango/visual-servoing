@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import cv2 as cv
 from cv_bridge import CvBridge
 import rospy
 from sensor_msgs.msg import CameraInfo, CompressedImage
@@ -15,12 +16,20 @@ PERCEPTION_METHODS = {
 class PerceptionNode:
     def __init__(self):
         self.rate = rospy.get_param('~rate')
+        self.record = rospy.get_param('~record')
         self.type = rospy.get_param('~type')
         self.args = rospy.get_param('~args', [])
 
+        self.m = 2
+
         self.bridge = CvBridge()
         self.raw_images = None
-
+        self.writer = cv.VideoWriter(
+            "perception.avi",
+            cv.VideoWriter_fourcc(*"MJPG"),
+            self.rate,
+            (640, self.m * 480)
+        )
         self.perception = PERCEPTION_METHODS[self.type](self.args)
 
         self.pub = rospy.Publisher(
@@ -37,12 +46,16 @@ class PerceptionNode:
         ))
         self.ts = message_filters.ApproximateTimeSynchronizer(self.subs, 1, 1)
         self.ts.registerCallback(self.callback)
+        rospy.on_shutdown(self.on_shutdown)
 
     def callback(self, *compresseds):
         self.raw_images = [
             self.bridge.compressed_imgmsg_to_cv2(compressed)
             for compressed in compresseds
         ]
+
+    def on_shutdown(self):
+        self.writer.release()
 
     def publish_state(self, state):
         message = Float32MultiArray()
@@ -65,11 +78,12 @@ class PerceptionNode:
             rate.sleep()
             if self.raw_images is None:
                 continue
-            state = self.perception.get_state(self.raw_images)
+            state, images = self.perception.get_state(self.raw_images)
+            if self.record:
+                self.writer.write(np.vstack(images))
             if state is None:
                 continue
             self.publish_state(state)
-            
 
 
 def main():
