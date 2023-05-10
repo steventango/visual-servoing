@@ -56,7 +56,7 @@ class ControlNode:
 
     def move_wam_to_ready_position(self):
         rospy.loginfo("Moving WAM to ready position...")
-        rate = rospy.Rate(self.rate)
+        rate = rospy.Rate(1)
         while not rospy.is_shutdown():
             rate.sleep()
             if not self.wam.ready:
@@ -64,33 +64,33 @@ class ControlNode:
                 continue
             break
 
-        steps = 8
-        trajectory = np.linspace(self.wam.position, self.wam.ready_position, steps)
-        for action in trajectory:
-            if la.norm(self.wam.position - self.wam.ready_position) < 1e-2:
-                break
-            rospy.loginfo(f"Action: {action}")
-            self.wam.joint_move(action)
-            rate.sleep()
+        self.wam.joint_move(self.wam.ready_position)
         rospy.loginfo("WAM in ready position!")
 
-
     def run(self):
-        self.move_wam_to_ready_position()
+        if not self.wam.emergency:
+            self.move_wam_to_ready_position()
 
         rate = rospy.Rate(self.rate)
         done = False
-        while not rospy.is_shutdown():
+        while not rospy.is_shutdown() and not self.wam.emergency:
             rate.sleep()
             self.wait_initialization()
             self.control_method.initialize(self.wam, self)
-            rospy.loginfo(f"B: {self.control_method.B}")
-            # action = self.control_method.get_action(self.state)
-            # self.wam.joint_move(action)
-            done = True
-            break
+            action, done = self.control_method.get_action(self.state, self.wam.position)
+            if done:
+                break
+            if action is None:
+                continue
+            rospy.loginfo(f"Position: {self.wam.position}")
+            rospy.loginfo(f"Action: {action}")
+            rospy.loginfo(f"Update: {action - self.wam.position}")
+            B = self.control_method.B 
+            rospy.loginfo(f"B: {B}")
+            rospy.loginfo(f"cond: {la.cond(B)}")
+            input("Press key to move...")
+            self.wam.joint_move(action)
         if done:
-            self.wam.go_home()
             rospy.loginfo("Done!")
 
 

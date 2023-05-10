@@ -47,6 +47,8 @@ class WAM:
             -0.06341508205589094,
             0.01366506663019359,
         ])
+        self.active_joints = (0, 1, 3)
+        # TODO: constrain so only active joints are useds
         self._position = None
         self._velocity = None
         self.dof = None
@@ -84,11 +86,10 @@ class WAM:
 
     def callback_pose(self, message: PoseStamped):
         self.pose = message.pose
-        rospy.loginfo_throttle(10, self.pose.position.z)
         self.enforce_constraints()
 
     def enforce_constraints(self):
-        if 'table' in self.constraints and self.pose.position.z < -0.2:
+        if 'table' in self.constraints and self.pose.position.z < -0.15:
             rospy.logerr("Table constrains violated!")
             self.emergency_stop()
             return
