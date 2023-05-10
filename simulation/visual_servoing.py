@@ -31,8 +31,8 @@ PROJECTIONS = np.stack((PROJECTION_1, PROJECTION_2))
 def forward_kinematics(theta: np.ndarray):
     x_1 = POINT_ORIGIN
     H_1 = tr.rotation_matrix([0, 0, theta[0]])
-    H_2 = tr.homogenous_matrix([0, theta[1], 0], [0, 0, LENGTH[0]])
-    H = H_1 @ H_2
+    H_2 = tr
+                plt.close() H_2
     x_3 = H @ POINT_ORIGIN
     H_3 = tr.homogenous_matrix([0, theta[2], 0], [LENGTH[1], 0, 0])
     H = H @ H_3
