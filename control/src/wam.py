@@ -6,6 +6,7 @@ from sensor_msgs.msg import JointState
 from geometry_msgs.msg import PoseStamped
 from wam_srvs.srv import JointMove
 
+
 class WAM:
     def __init__(self, namespace, constraints={'table'}):
         self.sub_joint_states = rospy.Subscriber(

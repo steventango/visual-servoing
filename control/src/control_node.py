@@ -63,13 +63,16 @@ class ControlNode:
                 rospy.loginfo("Waiting for WAM...")
                 continue
             break
-        
+
         steps = 8
         trajectory = np.linspace(self.wam.position, self.wam.ready_position, steps)
         for action in trajectory:
+            if la.norm(self.wam.position - self.wam.ready_position) < 1e-2:
+                break
             rospy.loginfo(f"Action: {action}")
             self.wam.joint_move(self.wam.ready_position)
             rate.sleep()
+        rospy.loginfo("WAM in ready position!")
 
 
     def run(self):
@@ -80,8 +83,8 @@ class ControlNode:
         while not rospy.is_shutdown():
             rate.sleep()
             self.wait_initialization()
-            # TODO: actually do VS
-            # action = self.control_method(self.state)
+            self.control_method.initialize(self.wam, self)
+            # action = self.control_method.get_action(self.state)
             # self.wam.joint_move(action)
             done = True
             break
