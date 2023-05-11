@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+import argparse
 import rospy
 from std_msgs.msg import Float32MultiArray
 from rospy.numpy_msg import numpy_msg
@@ -23,15 +24,33 @@ class ControlNode:
 
         self.state = None
 
-        self.control_method = CONTROL_METHODS[self.type](self.args)
+        self.mode = None
+        self.parser = argparse.ArgumentParser()
+        self.subparsers = self.parser.add_subparsers()
+        self.parser.add_argument('--quit', action='store_true')
+        self.parser.add_argument('--exit', action='store_true')
+        self.parser.add_argument('--shutdown', action='store_true')
+        self.parser.add_argument(
+            '--mode',
+            choices={'step', 'auto'},
+            default='auto'
+        )
 
-        self.wam = WAM(rospy.get_param('~wam_namespace'))
+        self.wam = WAM(
+            rospy.get_param('~wam_namespace'),
+            subparsers=self.subparsers
+        )
+
+        self.control_method = CONTROL_METHODS[self.type](
+            self.args,
+            subparsers=self.subparsers
+        )
+
         self.sub = rospy.Subscriber(
             '/perception_node/state',
             numpy_msg(Float32MultiArray),
             self.callback
         )
-        print("initialized!")
 
     def callback(self, message):
         state = message.data
@@ -54,36 +73,51 @@ class ControlNode:
         rospy.loginfo("Ready...")
         self.wam.emergency = False
 
-    def move_wam_to_ready_position(self):
-        rospy.loginfo("Moving WAM to ready position...")
-        rate = rospy.Rate(1)
+    def handle_args(self):
         while not rospy.is_shutdown():
-            rate.sleep()
-            if not self.wam.ready:
-                rospy.loginfo("Waiting for WAM...")
+            try:
+                args = self.parser.parse_args(input(">> ").split())
+            except SystemExit:
                 continue
-            break
-
-        self.wam.joint_move(self.wam.ready_position)
-        rospy.loginfo("WAM in ready position!")
+            if args.quit or args.exit or args.shutdown:
+                rospy.signal_shutdown("Quit")
+                break
+            if args.mode:
+                self.mode = args.mode
+            if args.help:
+                continue
+            self.wam.handle_args(args)
+            self.control_method.handle_args(args)
+        return args
 
     def run(self):
-        if not self.wam.emergency:
-            self.move_wam_to_ready_position()
-
         rate = rospy.Rate(self.rate)
+
+        while not rospy.is_shutdown():
+            rate.sleep()
+            if self.wam.ready:
+                break
+            rospy.loginfo("Waiting for WAM...")
+
+        args = self.handle_args()
+
+        self.wam.go_start()
+        rospy.loginfo("WAM in start position!")
+
         done = False
         while not rospy.is_shutdown() and not self.wam.emergency:
             rate.sleep()
             self.wait_initialization()
             self.control_method.initialize(self.wam, self)
+            rospy.loginfo(f"Position: {self.wam.position}")
             action, done = self.control_method.get_action(self.state, self.wam.position)
             if done:
                 break
             if action is None:
                 continue
-            rospy.loginfo(f"Position: {self.wam.position}")
-            # input("Press key to move...")
+            if args.mode == 'step':
+                rospy.loginfo("Press key to move...")
+                args = self.handle_args()
             self.wam.joint_move(action)
         if done:
             rospy.loginfo("Done!")

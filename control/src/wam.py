@@ -8,7 +8,7 @@ from wam_srvs.srv import JointMoveBlock
 
 
 class WAM:
-    def __init__(self, namespace, constraints={'table'}):
+    def __init__(self, namespace, constraints={'table'}, subparsers=None):
         self.sub_joint_states = rospy.Subscriber(
             f'{namespace}/joint_states',
             JointState,
@@ -38,7 +38,7 @@ class WAM:
             (-np.pi/2, np.pi/2),
             (-3.0, 3.0)
         ))
-        self._ready_position = np.array([
+        self._start_position = np.array([
             0.004784559124119499,
             0.4490540623980915,
             -0.0726144751661842,
@@ -56,6 +56,16 @@ class WAM:
         self.ready = False
         self.constraints = constraints
         self.emergency = False
+
+        self.subparsers = subparsers
+        self.move_joints_parser = None
+        if self.subparsers is not None:
+            self.go_parser = self.subparsers.add_parser('go')
+            self.go_parser.add_argument(
+                'position',
+                choices=['home', 'start'],
+            )
+
         rospy.on_shutdown(self.on_shutdown)
 
     @property
@@ -67,8 +77,8 @@ class WAM:
         return self._velocity.copy()
 
     @property
-    def ready_position(self):
-        return self._ready_position[:self.dof].copy()
+    def start_position(self):
+        return self._start_position[:self.dof].copy()
 
     def on_shutdown(self):
         rospy.loginfo("On shutdown...")
@@ -84,6 +94,13 @@ class WAM:
         self._position = np.array(message.position)
         self._velocity = np.array(message.velocity)
         self.ready = True
+        if self.move_joints_parser is None and self.subparsers is not None:
+            self.move_joints_parser = self.subparsers.add_parser('move_joints')
+            self.move_joints_parser.add_argument(
+                'joints',
+                type=float,
+                nargs=self.dof
+            )
 
     def callback_pose(self, message: PoseStamped):
         self.pose = message.pose
@@ -95,7 +112,7 @@ class WAM:
             self.emergency_stop()
             return
 
-    def joint_move(self, action: np.ndarray):
+    def joint_move(self, action: np.ndarray, block: bool = True):
         if not self.ready:
             rospy.logwarn("WAM not ready!")
             return
@@ -117,8 +134,20 @@ class WAM:
             rospy.logwarn(self.joint_limits[violated_joint_limits])
             return
         rospy.loginfo("Joint move...")
-        self._joint_move(action, True)
+        self._joint_move(action, block)
 
     def go_home(self):
         rospy.loginfo("Go home...")
         self._go_home()
+
+    def go_start(self):
+        rospy.loginfo("Go start...")
+        self.joint_move(self.start_position)
+
+    def handle_args(self, args):
+        if args.position == 'home':
+            self.go_home()
+        elif args.position == 'start':
+            self.go_start()
+        elif args.joints is not None:
+            self.joint_move(args.joints)
