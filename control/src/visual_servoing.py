@@ -21,22 +21,26 @@ class VisualServoing(ControlMethod):
         self.visual_servoing_parser = None
         if self.subparsers is not None:
             self.visual_servoing_parser = self.subparsers.add_parser(
-                'visual_servoing',
+                'vs',
                 help='Visual Servoing'
             )
+            self.visual_servoing_parser.set_defaults(func=self.handle_args)
             self.visual_servoing_parser.add_argument(
                 '--alpha',
                 type=float,
+                default=None,
                 help='Newton step size'
             )
             self.visual_servoing_parser.add_argument(
                 '--beta',
                 type=float,
-                help='Brodyen\'s update step size'
+                default=None,
+                help='Broyden\'s update step size'
             )
             self.visual_servoing_parser.add_argument(
                 '--epsilon',
                 type=float,
+                default=None,
                 help='Error threshold'
             )
 

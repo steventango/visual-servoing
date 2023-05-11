@@ -47,7 +47,7 @@ class WAM:
             -0.06341508205589094,
             0.01366506663019359,
         ])
-        self.active_joints = (0, 1, 3)
+        self.active_joints = [0, 1, 3]
         # TODO: constrain so only active joints are useds
         self.table_constraint_z = -0.15
         self._position = None
@@ -58,14 +58,27 @@ class WAM:
         self.emergency = False
 
         self.subparsers = subparsers
-        self.move_joints_parser = None
         if self.subparsers is not None:
-            self.go_parser = self.subparsers.add_parser('go')
-            self.go_parser.add_argument(
-                'position',
+            self.parser = self.subparsers.add_parser('wam', help='WAM')
+            self.parser.set_defaults(func=self.handle_args)
+            self.parser.add_argument(
+                '--position',
+                default=None,
                 choices=['home', 'start'],
+                help="Move robot to position"
             )
-
+            self.parser.add_argument(
+                '--joints',
+                type=float,
+                default=None,
+                nargs="*",
+                help='Move robot to joint angles'
+            )
+            self.parser.add_argument(
+                '--info',
+                action='store_true',
+                help='Get information on WAM state'
+            )
         rospy.on_shutdown(self.on_shutdown)
 
     @property
@@ -94,13 +107,6 @@ class WAM:
         self._position = np.array(message.position)
         self._velocity = np.array(message.velocity)
         self.ready = True
-        if self.move_joints_parser is None and self.subparsers is not None:
-            self.move_joints_parser = self.subparsers.add_parser('move_joints')
-            self.move_joints_parser.add_argument(
-                'joints',
-                type=float,
-                nargs=self.dof
-            )
 
     def callback_pose(self, message: PoseStamped):
         self.pose = message.pose
@@ -150,4 +156,13 @@ class WAM:
         elif args.position == 'start':
             self.go_start()
         elif args.joints is not None:
+            if len(args.joints) != self.dof:
+                rospy.logwarn(f"--joints requires {self.dof} floats")
+                return
             self.joint_move(args.joints)
+        if args.info:
+            rospy.loginfo("WAM Info")
+            rospy.loginfo(f"  Position: {self.position}")
+            rospy.loginfo(f"  Velocity: {self.velocity}")
+            rospy.loginfo(f"  Pose: ")
+            rospy.loginfo(self.pose)

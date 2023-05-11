@@ -97,4 +97,5 @@ class Tracking(Perception):
         key = cv.waitKey(1)
         if (key == ord('r')):
             self.initialized = False
+            state = np.full((self.m, self.n, 3), -1)
         return state, images

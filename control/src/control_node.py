@@ -24,14 +24,22 @@ class ControlNode:
 
         self.state = None
 
+        self.mode = 'step'
         self.parser = argparse.ArgumentParser()
+        self.parser.set_defaults(func=lambda _: None)
         self.subparsers = self.parser.add_subparsers()
-        self.parser.add_argument('--quit', action='store_true')
-        self.parser.add_argument('--exit', action='store_true')
-        self.parser.add_argument('--shutdown', action='store_true')
+        self.parser.add_argument(
+            '-q', '--quit', action='store_true',
+            help='quit program'
+        )
+        self.parser.add_argument(
+            '-s', '--step', action='store_true',
+            help='step one iteration of the control loop'
+        )
         self.parser.add_argument(
             '--mode',
-            choices={'step', 'auto'}
+            choices={'step', 'normal'},
+            help='Select mode, step: run one step of the control loop, then wait for input; normal: run control loop without input'
         )
 
         self.wam = WAM(
@@ -61,7 +69,9 @@ class ControlNode:
             rate.sleep()
             if self.state is None:
                 rospy.loginfo("Waiting for state...")
-            elif np.any(self.state < 0):
+                continue
+            rospy.loginfo(f"State: {self.state}")
+            if np.any(self.state < 0):
                 rospy.loginfo("Lost tracking...")
             elif not self.wam.ready:
                 rospy.loginfo("Waiting for WAM...")
@@ -72,20 +82,19 @@ class ControlNode:
         self.wam.emergency = False
 
     def handle_args(self):
-        while not rospy.is_shutdown():
+        while True:
             try:
-                args = self.parser.parse_args(input(">> ").split())
+                args = self.parser.parse_args(input(">>> ").split())
             except SystemExit:
                 continue
-            if args.quit or args.exit or args.shutdown:
-                rospy.signal_shutdown("Quit")
-                break
-            if args.mode is not None:
+            if args.quit:
+                exit()
+            elif args.mode is not None:
                 self.mode = args.mode
-            if args.help:
-                continue
-            self.wam.handle_args(args)
-            self.control_method.handle_args(args)
+            else:
+                args.func(args)
+            if args.step:
+                break
         return args
 
     def loop(self):
@@ -96,12 +105,12 @@ class ControlNode:
             self.control_method.initialize(self.wam, self)
             rospy.loginfo(f"Position: {self.wam.position}")
             action, done = self.control_method.get_action(self.state, self.wam.position)
-            if action is None:
-                continue
             if done:
                 break
+            if action is None:
+                continue
             if self.mode == 'step':
-                rospy.loginfo("Press key to move...")
+                rospy.loginfo("Input [-s] to move one step...")
                 self.handle_args()
             self.wam.joint_move(action)
 
