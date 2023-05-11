@@ -88,9 +88,25 @@ class ControlNode:
             self.control_method.handle_args(args)
         return args
 
+    def loop(self):
+        rate = rospy.Rate(self.rate)
+        while not rospy.is_shutdown() and not self.wam.emergency:
+            rate.sleep()
+            self.wait_initialization()
+            self.control_method.initialize(self.wam, self)
+            rospy.loginfo(f"Position: {self.wam.position}")
+            action, done = self.control_method.get_action(self.state, self.wam.position)
+            if action is None:
+                continue
+            if done:
+                break
+            if self.mode == 'step':
+                rospy.loginfo("Press key to move...")
+                self.handle_args()
+            self.wam.joint_move(action)
+
     def run(self):
         rate = rospy.Rate(self.rate)
-
         while not rospy.is_shutdown():
             rate.sleep()
             if self.wam.ready:
@@ -102,23 +118,10 @@ class ControlNode:
         self.wam.go_start()
         rospy.loginfo("WAM in start position!")
 
-        done = False
-        while not rospy.is_shutdown() and not self.wam.emergency:
-            rate.sleep()
-            self.wait_initialization()
-            self.control_method.initialize(self.wam, self)
-            rospy.loginfo(f"Position: {self.wam.position}")
-            action, done = self.control_method.get_action(self.state, self.wam.position)
-            if done:
-                break
-            if action is None:
-                continue
-            if self.mode == 'step':
-                rospy.loginfo("Press key to move...")
-                self.handle_args()
-            self.wam.joint_move(action)
-        if done:
+        while True:
+            self.loop()
             rospy.loginfo("Done!")
+            self.handle_args()
 
 
 def main():
