@@ -24,7 +24,6 @@ class ControlNode:
 
         self.state = None
 
-        self.mode = None
         self.parser = argparse.ArgumentParser()
         self.subparsers = self.parser.add_subparsers()
         self.parser.add_argument('--quit', action='store_true')
@@ -32,8 +31,7 @@ class ControlNode:
         self.parser.add_argument('--shutdown', action='store_true')
         self.parser.add_argument(
             '--mode',
-            choices={'step', 'auto'},
-            default='auto'
+            choices={'step', 'auto'}
         )
 
         self.wam = WAM(
@@ -82,7 +80,7 @@ class ControlNode:
             if args.quit or args.exit or args.shutdown:
                 rospy.signal_shutdown("Quit")
                 break
-            if args.mode:
+            if args.mode is not None:
                 self.mode = args.mode
             if args.help:
                 continue
@@ -99,7 +97,7 @@ class ControlNode:
                 break
             rospy.loginfo("Waiting for WAM...")
 
-        args = self.handle_args()
+        self.handle_args()
 
         self.wam.go_start()
         rospy.loginfo("WAM in start position!")
@@ -115,9 +113,9 @@ class ControlNode:
                 break
             if action is None:
                 continue
-            if args.mode == 'step':
+            if self.mode == 'step':
                 rospy.loginfo("Press key to move...")
-                args = self.handle_args()
+                self.handle_args()
             self.wam.joint_move(action)
         if done:
             rospy.loginfo("Done!")
