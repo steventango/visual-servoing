@@ -128,8 +128,9 @@ class WAM:
         if len(action) != self.dof:
             rospy.logwarn(f"Action must have length {self.dof}!")
             return
-        violated_joint_limit_l = action < self.joint_limits[:self.dof, 0]
-        violated_joint_limit_u = action > self.joint_limits[:self.dof, 1]
+        estimated_position = self.position + action
+        violated_joint_limit_l = estimated_position < self.joint_limits[:self.dof, 0]
+        violated_joint_limit_u = estimated_position > self.joint_limits[:self.dof, 1]
         violated_joint_limits = violated_joint_limit_l | violated_joint_limit_u
         if np.any(violated_joint_limits):
             rospy.logwarn("Joint limits violated!")
@@ -140,7 +141,7 @@ class WAM:
             rospy.logwarn(self.joint_limits[violated_joint_limits])
             return
         rospy.loginfo("Joint move...")
-        self._joint_move(action, block)
+        self._joint_move(estimated_position, block)
 
     def go_home(self):
         rospy.loginfo("Go home...")

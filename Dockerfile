@@ -14,6 +14,11 @@ COPY wam_common src/wam_common
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && catkin_make && . devel/setup.sh
 
+COPY requirements.txt requirements.txt
+RUN apt-get install -y python3-pip git
+RUN apt-get install -y python-dateutil
+RUN python3 -m pip install -r requirements.txt
+
 RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc \
     && echo "source $WS/devel/setup.bash" >> ~/.bashrc
 

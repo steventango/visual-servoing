@@ -1,2 +1,5 @@
 matplotlib
 numpy
+stable-baselines3[extra]==2.0.0a5
+git+https://github.com/steventango/gym-wam.git
+gymnasium==0.28.1

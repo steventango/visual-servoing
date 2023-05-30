@@ -80,11 +80,10 @@ class VisualServoing(ControlMethod):
         error = error.flatten()
         return error
 
-
-    def get_action(self, state: np.ndarray, position: np.ndarray):
+    def get_action(self, state: np.ndarray, wam: WAM):
         if not self.initialized:
             rospy.logerror("VS not initializied!")
-        action, done = self.broydens_step(state, position)
+        action, done = self.broydens_step(state, wam)
         return action, done
 
     def handle_args(self, args):
@@ -95,7 +94,7 @@ class VisualServoing(ControlMethod):
         if args.epsilon is not None:
             self.epsilon = args.epsilon
 
-    def broydens_step(self, state: np.ndarray, action: np.ndarray):
+    def broydens_step(self, state: np.ndarray, wam: WAM):
         rospy.loginfo(f"B: {np.array2string(self.B, precision=4, floatmode='fixed')}")
         rospy.loginfo(f"cond: {la.cond(self.B):.4f}")
 
@@ -115,7 +114,8 @@ class VisualServoing(ControlMethod):
             rospy.logwarn("Big update")
             return None, False
 
-        action[self.active_joints] += update
+        action = np.zeros_like(wam.position)
+        action[self.active_joints] = update
         rospy.loginfo(f"Action: {np.array2string(action, precision=4, floatmode='fixed')}")
 
         # Update B

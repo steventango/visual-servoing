@@ -4,15 +4,16 @@ import rospy
 from std_msgs.msg import Float32MultiArray
 from rospy.numpy_msg import numpy_msg
 import numpy as np
-import numpy.linalg as la
 from control import ControlMethod
 from visual_servoing import VisualServoing
+from rl.rl import RLControl
 from typing import Dict
 from wam import WAM
 
 
 CONTROL_METHODS: Dict[str, ControlMethod] = {
-    'visual_servoing': VisualServoing
+    'visual_servoing': VisualServoing,
+    'rl': RLControl,
 }
 
 
