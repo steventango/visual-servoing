@@ -5,19 +5,22 @@ import numpy as np
 
 def main():
     env = gym.make('WAMReachDense3DOF-v2', render_mode='human')
+    # env = gym.make('FetchReach-v2', render_mode='human')
     # TODO initial joint positioning
     # TODO better code for baselines / comparisions / plots perhaps / video generation
     # env = gym.make('FetchReach-v2', render_mode='human')
+
+    print(env.action_space)
+    print(env.observation_space)
 
     observation, info = env.reset()
     while True:
         action = env.action_space.sample()  # agent policy that uses the observation and info
         observation, reward, terminated, truncated, info = env.step(action)
         # print("Observation:")
-        # print(observation, observation["observation"].shape)
+        # print(observation, observation['observation'].shape, observation['desired_goal'].shape, observation['achieved_goal'].shape)
         # print("Action:")
         # print(action.shape, action)
-        # return
         points = np.concatenate([
             observation['achieved_goal'],
             observation['desired_goal']

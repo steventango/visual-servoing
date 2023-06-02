@@ -17,7 +17,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 from stable_baselines3.her.goal_selection_strategy import GoalSelectionStrategy
 from tqdm import tqdm
 
-ONE_ENV_ALGS = {TD3}
+ONE_ENV_ALGS = {DDPG, TD3}
 
 
 def main():
@@ -37,8 +37,6 @@ def main():
 
     # vec_env = make_vec_env(env_id, n_envs=1, vec_env_cls=SubprocVecEnv)
     # algs = [PPO]  # , SAC, A2C]
-    # hidden_sizes = [32]
-    # depths = [4]
     env = gym.make(env_id)
     n_actions = env.action_space.shape[-1]
     action_noise = NormalActionNoise(
@@ -46,12 +44,14 @@ def main():
         sigma=args.std * np.ones(n_actions)
     )
 
+    goal_selection_strategy = 'future'
+
     # for alg, hidden_size, depth in tqdm(itertools.product(algs, hidden_sizes, depths), total=len(hidden_sizes) * len(depths)):
     for _ in tqdm(range(args.repeat)):
         for alg in tqdm(algs):
             n_envs = 1 if alg in ONE_ENV_ALGS else os.cpu_count()
             vec_action_noise = action_noise if alg in ONE_ENV_ALGS else VectorizedActionNoise(action_noise, n_envs=n_envs)
-            vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=SubprocVecEnv)
+            vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv)
             # if Path(f"./logs/{env_id}_{hidden_size}_{depth}/").exists():
             #     continue
             model = alg(
@@ -69,8 +69,8 @@ def main():
                 action_noise=vec_action_noise,
                 # policy_kwargs=dict(
                 #    net_arch=dict(
-                #       pi=[16, 16, 16, 16, 16, 16],
-                #       qf=[16, 16, 16, 16, 16, 16],
+                #       pi=[1024, 1024],
+                #       qf=[1024, 1024],
                 #    )
                 # ),
             )

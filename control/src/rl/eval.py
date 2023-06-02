@@ -15,12 +15,12 @@ def main():
     parser.add_argument('model_path', type=str)
     args = parser.parse_args()
     env_id = 'WAMReachDense3DOF-v2'
+    env = gym.make(env_id, render_mode='human')
     alg = TD3
-    model = alg.load(args.model_path)
+    model = alg.load(args.model_path, env)
     rewards = []
     episode_reward = 0
 
-    env = gym.make(env_id, render_mode='human')
     observation, info = env.reset()
     while True:
         action, states_ = model.predict(observation)
