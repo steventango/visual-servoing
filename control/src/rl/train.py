@@ -32,7 +32,7 @@ def main():
     args = parser.parse_args()
     reward_type = "Dense" if args.reward_type == "Dense" else ""
     dof = "3DOF" if args.dof == 3 else ""
-    env_id = f'WAMReach{reward_type}{dof}-v2'
+    env_id = f'WAMVisualReach{reward_type}{dof}-v2'
     algs = [TD3]
 
     # vec_env = make_vec_env(env_id, n_envs=1, vec_env_cls=SubprocVecEnv)

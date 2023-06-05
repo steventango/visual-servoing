@@ -14,10 +14,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('model_path', type=str)
     args = parser.parse_args()
-    env_id = 'WAMReachDense3DOF-v2'
+    env_id = 'WAMVisualReachDense3DOF-v2'
     env = gym.make(env_id, render_mode='human')
     alg = TD3
-    model = alg.load(args.model_path, env)
+    try:
+        model = alg.load(args.model_path, env)
+    except IsADirectoryError:
+        model = alg.load(args.model_path + '/best_model.zip', env)
     rewards = []
     episode_reward = 0
 
@@ -25,32 +28,34 @@ def main():
     while True:
         action, states_ = model.predict(observation)
         observation, reward, terminated, truncated, info = env.step(action)
-        points = np.concatenate([
-            observation['achieved_goal'],
-            observation['desired_goal']
-        ]).reshape(4, 2)
-        points[:, 0] *= 480
-        points[:, 0] += 640 // 2
-        points[:, 1] *= 480
-        points[:, 1] += 480 // 2
-        points = points.astype(np.int64)
-        points[1::2, 1] += 480
-        image = np.ones((480 * 2, 640, 3), dtype=np.uint8) * 255
-        BLUE = (255, 0, 0)
-        RED = (0, 0, 255)
-        image = cv.circle(image, points[0], 10, BLUE, -1)
-        image = cv.circle(image, points[1], 10, BLUE, -1)
-        image = cv.circle(image, points[2], 10, RED, -1)
-        image = cv.circle(image, points[3], 10, RED, -1)
+        try:
+            points = np.concatenate([
+                observation['achieved_goal'],
+                observation['desired_goal']
+            ]).reshape(4, 2)
+            points[:, 0] *= 480
+            points[:, 0] += 640 // 2
+            points[:, 1] *= 480
+            points[:, 1] += 480 // 2
+            points = points.astype(np.int64)
+            points[1::2, 1] += 480
+            image = np.ones((480 * 2, 640, 3), dtype=np.uint8) * 255
+            BLUE = (255, 0, 0)
+            RED = (0, 0, 255)
+            image = cv.circle(image, points[0], 10, BLUE, -1)
+            image = cv.circle(image, points[1], 10, BLUE, -1)
+            image = cv.circle(image, points[2], 10, RED, -1)
+            image = cv.circle(image, points[3], 10, RED, -1)
 
-        cv.imshow('image', image)
-        cv.waitKey(1)
+            cv.imshow('image', image)
+            cv.waitKey(1)
+        except ValueError:
+            pass
         episode_reward += reward
         if terminated or truncated:
             rewards.append(episode_reward)
             print(f"Average Reward: {np.mean(rewards):.2f} +- {np.std(rewards):.2f}")
             episode_reward = 0
-            rewards = []
             if terminated:
                 print("Success")
                 import time
