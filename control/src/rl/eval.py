@@ -23,6 +23,7 @@ def main():
         model = alg.load(args.model_path + '/best_model.zip', env)
     rewards = []
     episode_reward = 0
+    successes = 0
 
     observation, info = env.reset()
     while True:
@@ -57,9 +58,11 @@ def main():
             print(f"Average Reward: {np.mean(rewards):.2f} +- {np.std(rewards):.2f}")
             episode_reward = 0
             if terminated:
-                print("Success")
+                successes += 1
+                print(f"Success ({successes}/{len(rewards)})")
                 import time
                 time.sleep(1)
+            print(f"Success Rate: {successes / len(rewards):.2f}")
             observation, info = env.reset()
 
     env.close()
