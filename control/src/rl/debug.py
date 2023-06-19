@@ -1,6 +1,9 @@
+import custom_policy
 import gymnasium as gym
 import cv2 as cv
 import numpy as np
+from stable_baselines3 import TD3
+from baseline import UncalibratedVisualServoingModel
 
 
 def main():
@@ -10,12 +13,16 @@ def main():
     # TODO better code for baselines / comparisions / plots perhaps / video generation
     # env = gym.make('FetchReach-v2', render_mode='human')
 
+    # model = TD3("CustomMultiInputPolicy", env)
+    model = UncalibratedVisualServoingModel(env, beta=0)
+
     print(env.action_space)
     print(env.observation_space)
 
     observation, info = env.reset()
+    terminated, truncated = False, False
     while True:
-        action = env.action_space.sample()  # agent policy that uses the observation and info
+        action, states_ = model.predict(observation, terminated, truncated)
         observation, reward, terminated, truncated, info = env.step(action)
         # print("Observation:")
         # print(observation, observation['observation'].shape, observation['desired_goal'].shape, observation['achieved_goal'].shape)
