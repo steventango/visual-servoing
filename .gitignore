@@ -212,3 +212,4 @@ qtcreator-*
 CATKIN_IGNORE
 
 data/
+experiments/
