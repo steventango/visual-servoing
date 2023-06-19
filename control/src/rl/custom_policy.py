@@ -50,44 +50,22 @@ class CustomActor(Actor):
             activation_fn,
             normalize_images,
         )
-
-        self.net_arch = net_arch
-        self.features_dim = features_dim
-        self.activation_fn = activation_fn
-
-        action_dim = get_action_dim(self.action_space)
-        layers = create_mlp(features_dim, action_dim, net_arch, activation_fn, squash_output=True)
-        # Deterministic action
-        actor_net = []
-        for layer in layers:
-            # Insert InstanceNorm1d layers
-            # if isinstance(layer, nn.Linear):
-            #     actor_net.append(nn.InstanceNorm1d(layer.in_features))
-            actor_net.append(layer)
+        self.n = observation_space["achieved_goal"].shape[0]
+        self.m = action_space.shape[0]
+        self.J: th.Tensor = th.zeros(self.n, self.m)
+        actor_net = create_mlp(features_dim, self.n * self.m, net_arch, activation_fn, squash_output=False)
         self.mu = nn.Sequential(*actor_net)
-
-    def _get_constructor_parameters(self) -> Dict[str, Any]:
-        data = super()._get_constructor_parameters()
-
-        data.update(
-            dict(
-                net_arch=self.net_arch,
-                features_dim=self.features_dim,
-                activation_fn=self.activation_fn,
-                features_extractor=self.features_extractor,
-            )
-        )
-        return data
+        # TODO: why can't we just learn J itself?
+        # self.J = th.randn(1, self.n, self.m, requires_grad=True)
 
     def forward(self, obs: th.Tensor) -> th.Tensor:
-        # assert deterministic, 'The TD3 actor only outputs deterministic actions'
-        features = self.extract_features(obs, self.features_extractor)
-        return self.mu(features)
+        self.J = super().forward(obs).reshape((-1, self.n, self.m))
+        error = obs["achieved_goal"] - obs["desired_goal"]
+        error = error.float()
+        action, *_ = th.linalg.lstsq(self.J, -error)
+        action = th.clamp(action, -1, 1)
+        return action
 
-    def _predict(self, observation: th.Tensor, deterministic: bool = False) -> th.Tensor:
-        # Note: the deterministic deterministic parameter is ignored in the case of TD3.
-        #   Predictions are always deterministic.
-        return self(observation)
 
 class CustomContinuousCritic(ContinuousCritic):
     """
