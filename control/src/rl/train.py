@@ -10,8 +10,18 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.noise import NormalActionNoise, VectorizedActionNoise
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.her.goal_selection_strategy import GoalSelectionStrategy
+from uvs import UVS
 
 ONE_ENV_ALGS = {DDPG, TD3, SAC}
+
+algs = {
+    "A2C": A2C,
+    "DDPG": DDPG,
+    "PPO": PPO,
+    "SAC": SAC,
+    "TD3": TD3,
+    "UVS": UVS,
+}
 
 
 def parse_args(argv=None):
@@ -80,6 +90,25 @@ def parse_args(argv=None):
         action="store_true",
         help="Do not display a progress bar using tqdm and rich",
     )
+    parser.add_argument(
+        '--policy',
+        type=str,
+        default='MultiInputPolicy',
+        choices=[
+            'MlpPolicy',
+            'CnnPolicy',
+            'MultiInputPolicy',
+            'CustomPolicy',
+            'CustomCnnPolicy',
+            'CustomMultiInputPolicy',
+        ],
+    )
+    parser.add_argument(
+        '--alg',
+        type=str,
+        default='TD3',
+        choices=['A2C', 'DDPG', 'PPO', 'SAC', 'TD3', 'UVS'],
+    )
     args = parser.parse_args(argv)
     return args
 
@@ -94,12 +123,12 @@ def train(args):
     env = gym.make(env_id)
     n_actions = env.action_space.shape[-1]
     action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=args.std * np.ones(n_actions))
-    alg = TD3
+    alg = algs[args.alg]
     n_envs = 1 if alg in ONE_ENV_ALGS else os.cpu_count()
     vec_action_noise = action_noise if alg in ONE_ENV_ALGS else VectorizedActionNoise(action_noise, n_envs=n_envs)
     vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv)
     model = alg(
-        "CustomMultiInputPolicy",
+        args.policy,
         vec_env,
         verbose=args.verbose,
         tensorboard_log=args.tensorboard_log_path,
