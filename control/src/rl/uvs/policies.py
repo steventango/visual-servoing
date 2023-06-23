@@ -19,8 +19,8 @@ class UVSPolicy(BasePolicy):
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         J: Tensor = None,
-        alpha: float = 0.5,
-        beta: float = 0.0,
+        alpha: float = 1.0,
+        beta: float = 0.,
         gamma: float = 1.0,
         steps: int = 3,
         **kwargs
@@ -44,12 +44,13 @@ class UVSPolicy(BasePolicy):
         gamma: Action velocity for central differences
         steps: Number of steps to take for central differences
         """
-        self.obs_shape = observation_space["achieved_goal"].shape[0]
+        self.observation_shape = observation_space["observation"].shape[0]
+        self.goal_shape = observation_space["achieved_goal"].shape[0]
         self.action_shape = action_space.shape[0]
 
         if J is not None:
-            assert J.shape == (self.obs_shape, self.action_shape)
-            self.J = J.copy()
+            assert J.shape == (self.goal_shape, self.action_shape)
+            self.J = J.clone()
             self.initialized = True
         else:
             self.J = None
@@ -64,6 +65,7 @@ class UVSPolicy(BasePolicy):
 
         self.first_step = True
         self.errors = None
+        self.observations = None
         self.i = 0
         self.j = 0
         self.k = 0
@@ -110,12 +112,15 @@ class UVSPolicy(BasePolicy):
             if self.j < len(self.central_differences_trajectory):
                 gamma = self.central_differences_trajectory[self.j]
                 if not self.first_step and self.prev_action is not None and gamma * th.sum(self.prev_action) < 0:
-                    self.errors[self.k] = self.calculate_error(observation)
+                    self.errors[:, self.k] = self.calculate_error(observation)
+                    self.observations[:, self.k] = observation["observation"].clone()
                     self.k += 1
                 actions[:, self.i] = gamma
                 self.j += 1
             else:
-                self.J[:, :, self.i] = (self.errors[0] - self.errors[1]) / (2 * self.gamma * self.steps)
+                de = self.errors[:, 0] - self.errors[:, 1]
+                ds = self.observations[:, 0, self.i] - self.observations[:, 1, self.i]
+                self.J[:, :, self.i] = de / (2 * ds * self.steps)
                 self.i += 1
                 self.j = 0
                 self.k = 0
@@ -124,11 +129,12 @@ class UVSPolicy(BasePolicy):
             self.initialized = True
             return None
 
-    def forward(self, obs: th.Tensor, deterministic: bool = False) -> th.Tensor:
+    def forward(self, obs: Dict[str, th.Tensor], deterministic: bool = False) -> th.Tensor:
         self.batch_size = obs['observation'].shape[0]
         if self.errors is None:
-            self.errors = th.zeros((2, self.batch_size, self.obs_shape), dtype=th.float64)
-            self.J = th.zeros((self.batch_size, self.obs_shape, self.action_shape), dtype=th.float64)
+            self.errors = th.zeros((self.batch_size, 2, self.goal_shape), dtype=th.float64)
+            self.observations = th.zeros((self.batch_size, 2, self.observation_shape), dtype=th.float64)
+            self.J = th.zeros((self.batch_size, self.goal_shape, self.action_shape), dtype=th.float64)
         if not self.initialized:
             action = self.calculate_central_differences(obs)
         if self.initialized or action is None:
