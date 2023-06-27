@@ -69,7 +69,7 @@ class UVS(BaseAlgorithm):
         self.policy = self.policy_class(  # type: ignore[assignment]
             self.observation_space,
             self.action_space,
-            self.lr_schedule,
+            lr_schedule=self.lr_schedule,
             **self.policy_kwargs
         )
         # pytype:enable=not-instantiable
@@ -120,7 +120,8 @@ class UVS(BaseAlgorithm):
             if isinstance(self.action_space, spaces.Box):
                 clipped_actions = np.clip(actions, self.action_space.low, self.action_space.high)
 
-            self._last_obs, rewards, self._last_episode_starts, infos = self.env.step(clipped_actions)
+            self._last_obs, rewards, dones, infos = self.env.step(clipped_actions)
+            self._last_episode_starts = dones
             self.num_timesteps += self.env.num_envs
 
             # Give access to local variables
@@ -128,7 +129,7 @@ class UVS(BaseAlgorithm):
             if callback.on_step() is False:
                 break
 
-            self._update_info_buffer(infos)
+            self._update_info_buffer(infos, dones)
 
             iteration += 1
             self._update_current_progress_remaining(self.num_timesteps, total_timesteps)
@@ -146,6 +147,8 @@ class UVS(BaseAlgorithm):
                     self.logger.record(
                         "rollout/ep_len_mean", safe_mean([ep_info["l"] for ep_info in self.ep_info_buffer])
                     )
+                if len(self.ep_success_buffer) > 0:
+                    self.logger.record("rollout/success_rate", safe_mean(self.ep_success_buffer))
                 self.logger.record("time/fps", fps)
                 self.logger.record("time/time_elapsed", int(time_elapsed), exclude="tensorboard")
                 self.logger.record("time/total_timesteps", self.num_timesteps, exclude="tensorboard")
