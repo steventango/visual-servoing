@@ -1,10 +1,11 @@
 import logging
-from typing import Dict, Optional, Type, Any
+from typing import Dict, Optional, Type, Any, Callable
 from gymnasium import spaces
 import torch as th
 from torch import Tensor
 from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor, FlattenExtractor
+Schedule = Callable[[float], float]
 
 
 class UVSPolicy(BasePolicy):
@@ -19,10 +20,10 @@ class UVSPolicy(BasePolicy):
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         J: Tensor = None,
-        alpha: float = 1.0,
-        beta: float = 0.,
-        gamma: float = 1.0,
-        steps: int = 3,
+        alpha: float = 0.1,
+        gamma: float = 0.15,
+        steps: int = 1,
+        lr_schedule: Schedule = None,
         **kwargs
     ):
         super().__init__(
@@ -32,7 +33,7 @@ class UVSPolicy(BasePolicy):
             features_extractor_kwargs,
             optimizer_class=optimizer_class,
             optimizer_kwargs=optimizer_kwargs,
-            squash_output=True,
+            squash_output=False,
             normalize_images=normalize_images,
         )
         """
@@ -40,7 +41,7 @@ class UVSPolicy(BasePolicy):
         env: gym environment
         J: Initial jacobian (obs_shape * action_shape)
         alpha: Newton step size
-        beta: Broyden's update step size
+        learning_rate: Broyden's update step size
         gamma: Action velocity for central differences
         steps: Number of steps to take for central differences
         """
@@ -57,7 +58,7 @@ class UVSPolicy(BasePolicy):
             self.initialized = False
 
         self.alpha = alpha
-        self.beta = beta
+        self.lr_schedule = lr_schedule
         self.gamma = gamma
         self.steps = steps
 
@@ -69,9 +70,11 @@ class UVSPolicy(BasePolicy):
         self.i = 0
         self.j = 0
         self.k = 0
+        self.prev_gamma = 0
 
         self.prev_error = None
         self.prev_action = None
+        self.prev_obs = [None, None]
 
     def generate_central_differences_trajectory(self):
         """
@@ -107,24 +110,25 @@ class UVSPolicy(BasePolicy):
         action: action to take
         """
         # estimate one column of the jacobian at a time
-        if self.i < self.action_shape:
-            actions = th.zeros(self.batch_size, self.action_shape)
+        while self.i < self.action_shape:
+            action = th.zeros((self.batch_size, self.action_shape))
             if self.j < len(self.central_differences_trajectory):
                 gamma = self.central_differences_trajectory[self.j]
-                if not self.first_step and self.prev_action is not None and gamma * th.sum(self.prev_action) < 0:
+                if not self.first_step and self.prev_action is not None and gamma * self.prev_gamma < 0:
                     self.errors[:, self.k] = self.calculate_error(observation)
                     self.observations[:, self.k] = observation["observation"].clone()
                     self.k += 1
-                actions[:, self.i] = gamma
+                action[:, self.i] = gamma
+                self.prev_gamma = gamma
                 self.j += 1
+                return action
             else:
                 de = self.errors[:, 0] - self.errors[:, 1]
                 ds = self.observations[:, 0, self.i] - self.observations[:, 1, self.i]
-                self.J[:, :, self.i] = de / (2 * ds * self.steps)
+                self.J[:, :, self.i] = de / ds
                 self.i += 1
                 self.j = 0
                 self.k = 0
-            return actions
         else:
             self.initialized = True
             return None
@@ -140,8 +144,10 @@ class UVSPolicy(BasePolicy):
         if self.initialized or action is None:
             action = self._predict(obs, deterministic)
 
-        self.prev_action = action
+        self.prev_obs[0] = self.prev_obs[1]
+        self.prev_obs[1] = {k: v.clone() for k, v in obs.items()}
         self.first_step = False
+        self.prev_action = action.clone()
         return action
 
     def _predict(self, observation: th.Tensor, deterministic: bool = False) -> th.Tensor:
@@ -156,27 +162,64 @@ class UVSPolicy(BasePolicy):
         :return: Taken action according to the policy
         """
         error = self.calculate_error(observation)
-        action = self.visual_servo(error)
+        # self.broydens_step(observation, error)
+        action = self.visual_servo(observation, error)
 
-        self.broydens_step(error)
-        self.prev_error = error
+        self.prev_error = error.clone()
 
         return action
 
-    def visual_servo(self, error):
+    def visual_servo(self, observation, error):
         try:
-            action, *_ = th.linalg.lstsq(self.J, -error, rcond=-1)
+            # update, *_ = th.linalg.lstsq(self.J, -error, rcond=-1)
+            # TODO: try SVD
+            # U, s, Vh = th.linalg.svd(self.J)
+            # print(s)
+            # d = th.zeros((th.max(U.shape[-1], Vh.shape[-1]),))
+            # d[:, s > 0] = 1 / s[:, s > 0]
+            # D = th.diagflat(d)
+            # print(Vh.shape, D.shape, U.shape, error.shape)
+            # action = th.transpose(Vh, 1, 2) @ D @ th.transpose(U, 1, 2) @ -error
+            #
+            update = -th.linalg.pinv(self.J) @ error.squeeze()
+            self.prev_update = update.clone()
+            action = self.alpha * update
         except th.linalg.LinAlgError as e:
-            action = th.zeros(self.action_shape)
             logging.error(e)
-        action *= self.alpha
+            logging.error(self.J)
+            action = th.zeros((self.batch_size, self.action_shape))
+
         return action
 
-    def broydens_step(self, error):
-        if self.prev_error is None:
+    def broydens_step(self, obs, error):
+        if self.prev_obs[0] is None or self.prev_error is None:
             return
-        y = (error - self.prev_error).unsqueeze(2)
-        prev_action = self.prev_action[:, :, None]
-        prev_action_T = th.transpose(prev_action, 1, 2)
-        B = (y - self.J @ prev_action) @ prev_action_T / (prev_action_T @ prev_action)
-        self.J += self.beta * B
+        s = (obs['observation'] - self.prev_obs[1]['observation']) - (self.prev_obs[1]['observation'] - self.prev_obs[0]['observation'])
+        # s = self.prev_action
+        # s = self.prev_update
+        s_norm = th.linalg.norm(s, dim=1)
+        s = s[:, :, None]
+        sT = th.transpose(s, 1, 2)
+        y = error - self.prev_error
+        y = th.unsqueeze(y, 2)
+        y_norm = th.linalg.norm(y, dim=1)
+        y_norm = th.squeeze(y_norm, 1)
+        y_estimate = self.J @ s
+        y_estimate /= th.linalg.norm(y_estimate, dim=1)
+        y_estimate *= y_norm
+        B = ((y - y_estimate) @ sT) / (sT @ s)
+        # B[s_norm < 1e-2] = 0
+        # B[y_norm < 1e-2] = 0
+        # print("-----------")
+        # print("dq")
+        # print(s.squeeze())
+        # print("y")
+        # print(y.squeeze())
+        # print("y_estimate")
+        # print((y_estimate).squeeze())
+        # print("Bryoden update")
+        # print(B.squeeze())
+        # print("Jacobian")
+        # print(self.J.squeeze())
+        # print("-----------")
+        # self.J += self.lr_schedule(0) * B
