@@ -14,7 +14,7 @@ from uvs import UVS
 
 ONE_ENV_ALGS = {DDPG, TD3, SAC}
 
-algs = {
+ALGS = {
     "A2C": A2C,
     "DDPG": DDPG,
     "PPO": PPO,
@@ -109,22 +109,26 @@ def parse_args(argv=None):
         default='TD3',
         choices=['A2C', 'DDPG', 'PPO', 'SAC', 'TD3', 'UVS'],
     )
+    parser.add_argument(
+        "--n_envs",
+        type=int,
+        default=os.cpu_count(),
+        help="Number of parallel environments",
+    )
     args = parser.parse_args(argv)
     return args
 
 
 def train(args):
     reward_type = "Dense" if args.reward_type == "Dense" else ""
-    if args.dof < 7:
-        dof = f"{args.dof}DOF"
-    dof = "3DOF" if args.dof == 3 else ""
+    dof = f"{args.dof}DOF" if args.dof < 7 else ""
     env_id = f"WAMVisualReach{reward_type}{dof}-v2"
 
     env = gym.make(env_id)
     n_actions = env.action_space.shape[-1]
     action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=args.std * np.ones(n_actions))
-    alg = algs[args.alg]
-    n_envs = 1 if alg in ONE_ENV_ALGS else os.cpu_count()
+    alg = ALGS[args.alg]
+    n_envs = 1 if alg in ONE_ENV_ALGS else args.n_envs
     vec_action_noise = action_noise if alg in ONE_ENV_ALGS else VectorizedActionNoise(action_noise, n_envs=n_envs)
     vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv)
     model = alg(

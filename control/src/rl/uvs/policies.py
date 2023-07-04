@@ -1,10 +1,12 @@
 import logging
-from typing import Dict, Optional, Type, Any, Callable
-from gymnasium import spaces
+from typing import Any, Callable, Dict, Optional, Type
+
 import torch as th
-from torch import Tensor
+from gymnasium import spaces
 from stable_baselines3.common.policies import BasePolicy
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor, FlattenExtractor
+from torch import Tensor
+
 Schedule = Callable[[float], float]
 
 
@@ -56,6 +58,7 @@ class UVSPolicy(BasePolicy):
         else:
             self.J = None
             self.initialized = False
+        self.B = None
 
         self.alpha = alpha
         self.lr_schedule = lr_schedule
@@ -74,7 +77,7 @@ class UVSPolicy(BasePolicy):
 
         self.prev_error = None
         self.prev_action = None
-        self.prev_obs = [None, None]
+        self.prev_obs = None
 
     def generate_central_differences_trajectory(self):
         """
@@ -144,8 +147,6 @@ class UVSPolicy(BasePolicy):
         if self.initialized or action is None:
             action = self._predict(obs, deterministic)
 
-        self.prev_obs[0] = self.prev_obs[1]
-        self.prev_obs[1] = {k: v.clone() for k, v in obs.items()}
         self.first_step = False
         self.prev_action = action.clone()
         return action
@@ -161,42 +162,43 @@ class UVSPolicy(BasePolicy):
         :param deterministic: Whether to use stochastic or deterministic actions
         :return: Taken action according to the policy
         """
-        error = self.calculate_error(observation)
-        # self.broydens_step(observation, error)
-        action = self.visual_servo(observation, error)
+        # TODO: reset on new episode func
+        if self.prev_obs is None:
+            self.B = self.J.clone()
+        else:
+            delta_desired_goal_norm = th.linalg.norm(observation['desired_goal'] - self.prev_obs['desired_goal'], dim=1)
+            slice = delta_desired_goal_norm > 1e-3
+            self.B[slice] = self.J.clone()
+            self.prev_obs = None
 
+        error = self.calculate_error(observation)
+        self.broydens_step(observation, error)
+        action = self.visual_servo(error)
+
+        self.prev_obs = {k: v.clone() for k, v in observation.items()}
         self.prev_error = error.clone()
+        self.prev_action = action.clone()
 
         return action
 
-    def visual_servo(self, observation, error):
+    def visual_servo(self, error):
         try:
-            # update, *_ = th.linalg.lstsq(self.J, -error, rcond=-1)
-            # TODO: try SVD
-            # U, s, Vh = th.linalg.svd(self.J)
-            # print(s)
-            # d = th.zeros((th.max(U.shape[-1], Vh.shape[-1]),))
-            # d[:, s > 0] = 1 / s[:, s > 0]
-            # D = th.diagflat(d)
-            # print(Vh.shape, D.shape, U.shape, error.shape)
-            # action = th.transpose(Vh, 1, 2) @ D @ th.transpose(U, 1, 2) @ -error
-            #
-            update = -th.linalg.pinv(self.J) @ error.squeeze()
+            update = -th.linalg.pinv(self.B) @ error.squeeze()
             self.prev_update = update.clone()
-            action = self.alpha * update
+            action = update
         except th.linalg.LinAlgError as e:
             logging.error(e)
-            logging.error(self.J)
+            logging.error(self.B)
             action = th.zeros((self.batch_size, self.action_shape))
+
+        action[th.linalg.norm(action, dim=1) > 0.5] = self.alpha * action[th.linalg.norm(action, dim=1) > 0.5]
 
         return action
 
     def broydens_step(self, obs, error):
-        if self.prev_obs[0] is None or self.prev_error is None:
+        if self.prev_obs is None or self.prev_error is None:
             return
-        s = (obs['observation'] - self.prev_obs[1]['observation']) - (self.prev_obs[1]['observation'] - self.prev_obs[0]['observation'])
-        # s = self.prev_action
-        # s = self.prev_update
+        s = obs['observation'] - self.prev_obs['observation']
         s_norm = th.linalg.norm(s, dim=1)
         s = s[:, :, None]
         sT = th.transpose(s, 1, 2)
@@ -204,22 +206,8 @@ class UVSPolicy(BasePolicy):
         y = th.unsqueeze(y, 2)
         y_norm = th.linalg.norm(y, dim=1)
         y_norm = th.squeeze(y_norm, 1)
-        y_estimate = self.J @ s
-        y_estimate /= th.linalg.norm(y_estimate, dim=1)
-        y_estimate *= y_norm
+        y_estimate = self.B @ s
         B = ((y - y_estimate) @ sT) / (sT @ s)
-        # B[s_norm < 1e-2] = 0
-        # B[y_norm < 1e-2] = 0
-        # print("-----------")
-        # print("dq")
-        # print(s.squeeze())
-        # print("y")
-        # print(y.squeeze())
-        # print("y_estimate")
-        # print((y_estimate).squeeze())
-        # print("Bryoden update")
-        # print(B.squeeze())
-        # print("Jacobian")
-        # print(self.J.squeeze())
-        # print("-----------")
-        # self.J += self.lr_schedule(0) * B
+        B[s_norm < 1e-3] = 0
+        B[y_norm < 1e-2] = 0
+        self.B += self.lr_schedule(0) * B
