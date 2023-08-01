@@ -4,8 +4,11 @@ import os
 import gymnasium as gym
 import nj
 import numpy as np
+from gymnasium.wrappers import RecordVideo
 from jsrl.jsrl import get_jsrl_algorithm
+from pyvirtualdisplay import Display
 from stable_baselines3 import A2C, DDPG, PPO, SAC, TD3, HerReplayBuffer
+from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.noise import NormalActionNoise, VectorizedActionNoise
@@ -32,6 +35,7 @@ def parse_args(argv=None):
     parser.add_argument("--model_path", type=str, help="Path to save model as")
     parser.add_argument("--eval_log_path", type=str, help="Path to save evaluation logs as")
     parser.add_argument("--tensorboard_log_path", type=str, help="Path to save tensorboard logs as")
+    parser.add_argument("--video_path", type=str, help="Path to save videos as")
     parser.add_argument(
         "--total_timesteps",
         type=int,
@@ -130,6 +134,7 @@ def train(args):
     n_envs = 1 if algs in ONE_ENV_ALGS else args.n_envs
     vec_action_noise = action_noise if algs in ONE_ENV_ALGS else VectorizedActionNoise(action_noise, n_envs=n_envs)
     vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv)
+    eval_vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv)
     policy_kwargs = dict(
         # optimizer_class=torch.optim.AdamW,
         share_features_extractor=True,
@@ -153,7 +158,7 @@ def train(args):
         policy_kwargs["window_size"] = 1
     else:
         alg = algs
-    model = alg(
+    model: BaseAlgorithm = alg(
         args.policy,
         vec_env,
         verbose=args.verbose,
@@ -179,7 +184,7 @@ def train(args):
     if args.verbose >= 1:
         print(param_str)
     eval_callback = EvalCallback(
-        vec_env,
+        eval_vec_env,
         n_eval_episodes=args.n_eval_episodes,
         eval_freq=args.eval_freq,
         log_path=args.eval_log_path,
@@ -191,6 +196,26 @@ def train(args):
         callback=eval_callback,
         progress_bar=not args.no_progress_bar,
     )
+
+    display = Display(visible=0, size=(480, 480))
+    display.start()
+    env = gym.make(env_id, render_mode="rgb_array")
+    env = RecordVideo(
+        env,
+        args.video_path,
+        video_length=600,
+        disable_logger=args.verbose < 1
+    )
+    observation, info = env.reset()
+    for _ in range(10):
+        while True:
+            action, states_ = model.predict(observation)
+            observation, reward, terminated, truncated, info = env.step(action)
+            if terminated or truncated:
+                observation, info = env.reset()
+                break
+    env.close()
+
     return num_params
 
 
