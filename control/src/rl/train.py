@@ -1,7 +1,6 @@
 import argparse
 import os
 
-import custom_policy
 import gymnasium as gym
 import numpy as np
 from stable_baselines3 import A2C, DDPG, PPO, SAC, TD3, HerReplayBuffer
@@ -11,6 +10,7 @@ from stable_baselines3.common.noise import NormalActionNoise, VectorizedActionNo
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.her.goal_selection_strategy import GoalSelectionStrategy
 from uvs import UVS
+from jsrl.jsrl import get_jsrl_algorithm
 
 ONE_ENV_ALGS = {DDPG, TD3, SAC}
 
@@ -21,6 +21,7 @@ ALGS = {
     "SAC": SAC,
     "TD3": TD3,
     "UVS": UVS,
+    "JSRL-UVS-TD3": (UVS, TD3),
 }
 
 
@@ -107,7 +108,7 @@ def parse_args(argv=None):
         '--alg',
         type=str,
         default='TD3',
-        choices=['A2C', 'DDPG', 'PPO', 'SAC', 'TD3', 'UVS'],
+        choices=['A2C', 'DDPG', 'PPO', 'SAC', 'TD3', 'UVS', 'JSRL-UVS-TD3'],
     )
     parser.add_argument(
         "--n_envs",
@@ -127,10 +128,32 @@ def train(args):
     env = gym.make(env_id)
     n_actions = env.action_space.shape[-1]
     action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=args.std * np.ones(n_actions))
-    alg = ALGS[args.alg]
-    n_envs = 1 if alg in ONE_ENV_ALGS else args.n_envs
-    vec_action_noise = action_noise if alg in ONE_ENV_ALGS else VectorizedActionNoise(action_noise, n_envs=n_envs)
+    algs = ALGS[args.alg]
+    n_envs = 1 if algs in ONE_ENV_ALGS else args.n_envs
+    vec_action_noise = action_noise if algs in ONE_ENV_ALGS else VectorizedActionNoise(action_noise, n_envs=n_envs)
     vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv)
+    policy_kwargs = dict(
+        net_arch=dict(
+            pi=[args.hidden_size] * args.depth,
+            qf=[args.hidden_size] * args.depth,
+        ),
+        # optimizer_class=torch.optim.AdamW,
+        share_features_extractor=True,
+    )
+    if args.alg.startswith("JSRL"):
+        guide_model = algs[0]("MultiInputPolicy", env)
+        if isinstance(guide_model, UVS):
+            guide_model.learn(total_timesteps=100)
+        alg = get_jsrl_algorithm(algs[1])
+        max_horizon = 10
+        n = 5
+        policy_kwargs["guide_policy"] = guide_model.policy
+        policy_kwargs["max_horizon"] = max_horizon
+        policy_kwargs["horizons"] = np.arange(max_horizon, -1, -max_horizon // n)
+        policy_kwargs["tolerance"] = 0.1
+        policy_kwargs["window_size"] = 1
+    else:
+        alg = algs
     model = alg(
         args.policy,
         vec_env,
@@ -143,14 +166,7 @@ def train(args):
         #     goal_selection_strategy=goal_selection_strategy,
         # ),
         action_noise=vec_action_noise,
-        policy_kwargs=dict(
-            net_arch=dict(
-                pi=[args.hidden_size] * args.depth,
-                qf=[args.hidden_size] * args.depth,
-            ),
-            # optimizer_class=torch.optim.AdamW,
-            share_features_extractor=True,
-        ),
+        policy_kwargs=policy_kwargs,
         learning_rate=args.learning_rate,
     )
     if args.verbose >= 1:
