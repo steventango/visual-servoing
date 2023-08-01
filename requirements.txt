@@ -1,5 +1,6 @@
 jsrl==0.0.3
 matplotlib
+moviepy
 numpy
 stable-baselines3[extra]==2.0.0
 git+https://github.com/steventango/gym-wam.git
