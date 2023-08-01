@@ -162,14 +162,13 @@ class UVSPolicy(BasePolicy):
         :param deterministic: Whether to use stochastic or deterministic actions
         :return: Taken action according to the policy
         """
-        # TODO: reset on new episode func
+        observation = {k: v.to(self.device) for k, v in observation.items()}
         if self.prev_obs is None:
             self.B = self.J.clone()
         else:
-            delta_desired_goal_norm = th.linalg.norm(observation['desired_goal'].to(self.device) - self.prev_obs['desired_goal'].to(self.device), dim=1)
-            slice = delta_desired_goal_norm > 1e-3
-            self.B[slice] = self.J.clone()
-            self.prev_obs = None
+            delta_desired_goal_norm = th.linalg.norm(observation['desired_goal'] - self.prev_obs['desired_goal'], dim=1)
+            new_episode = delta_desired_goal_norm > 1e-3
+            self.B[new_episode] = self.J.clone()
 
         error = self.calculate_error(observation)
         self.broydens_step(observation, error)
@@ -183,7 +182,7 @@ class UVSPolicy(BasePolicy):
 
     def visual_servo(self, error):
         try:
-            update = -th.linalg.pinv(self.B) @ error.squeeze().to(self.device)
+            update = -th.linalg.pinv(self.B) @ error.squeeze()
             self.prev_update = update.clone()
             action = update
         except th.linalg.LinAlgError as e:
