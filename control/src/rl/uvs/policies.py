@@ -86,7 +86,7 @@ class UVSPolicy(BasePolicy):
         ## Returns
         trajectory: trajectory to use for central differences
         """
-        trajectory = th.full((4 * self.steps,), self.gamma, dtype=th.float64)
+        trajectory = th.full((4 * self.steps,), self.gamma, dtype=th.float64, device=self.device)
         trajectory[self.steps : 3 * self.steps] *= -1
         return trajectory
 
@@ -114,7 +114,7 @@ class UVSPolicy(BasePolicy):
         """
         # estimate one column of the jacobian at a time
         while self.i < self.action_shape:
-            action = th.zeros((self.batch_size, self.action_shape))
+            action = th.zeros((self.batch_size, self.action_shape), device=self.device)
             if self.j < len(self.central_differences_trajectory):
                 gamma = self.central_differences_trajectory[self.j]
                 if not self.first_step and self.prev_action is not None and gamma * self.prev_gamma < 0:
@@ -139,9 +139,9 @@ class UVSPolicy(BasePolicy):
     def forward(self, obs: Dict[str, th.Tensor], deterministic: bool = False) -> th.Tensor:
         self.batch_size = obs['observation'].shape[0]
         if self.errors is None:
-            self.errors = th.zeros((self.batch_size, 2, self.goal_shape), dtype=th.float64)
-            self.observations = th.zeros((self.batch_size, 2, self.observation_shape), dtype=th.float64)
-            self.J = th.zeros((self.batch_size, self.goal_shape, self.action_shape), dtype=th.float64)
+            self.errors = th.zeros((self.batch_size, 2, self.goal_shape), dtype=th.float64, device=self.device)
+            self.observations = th.zeros((self.batch_size, 2, self.observation_shape), dtype=th.float64, device=self.device)
+            self.J = th.zeros((self.batch_size, self.goal_shape, self.action_shape), dtype=th.float64, device=self.device)
         if not self.initialized:
             action = self.calculate_central_differences(obs)
         if self.initialized or action is None:
@@ -166,7 +166,7 @@ class UVSPolicy(BasePolicy):
         if self.prev_obs is None:
             self.B = self.J.clone()
         else:
-            delta_desired_goal_norm = th.linalg.norm(observation['desired_goal'] - self.prev_obs['desired_goal'], dim=1)
+            delta_desired_goal_norm = th.linalg.norm(observation['desired_goal'].to(self.device) - self.prev_obs['desired_goal'].to(self.device), dim=1)
             slice = delta_desired_goal_norm > 1e-3
             self.B[slice] = self.J.clone()
             self.prev_obs = None
@@ -183,13 +183,13 @@ class UVSPolicy(BasePolicy):
 
     def visual_servo(self, error):
         try:
-            update = -th.linalg.pinv(self.B) @ error.squeeze()
+            update = -th.linalg.pinv(self.B) @ error.squeeze().to(self.device)
             self.prev_update = update.clone()
             action = update
         except th.linalg.LinAlgError as e:
             logging.error(e)
             logging.error(self.B)
-            action = th.zeros((self.batch_size, self.action_shape))
+            action = th.zeros((self.batch_size, self.action_shape), device=self.device)
 
         action[th.linalg.norm(action, dim=1) > 0.5] = self.alpha * action[th.linalg.norm(action, dim=1) > 0.5]
 
