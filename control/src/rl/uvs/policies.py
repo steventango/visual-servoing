@@ -133,21 +133,28 @@ class UVSPolicy(BasePolicy):
                 self.j = 0
                 self.k = 0
         else:
+            self.B = self.J.clone()
             self.initialized = True
             return None
 
     def forward(self, obs: Dict[str, th.Tensor], deterministic: bool = False) -> th.Tensor:
+        obs = {k: v.to(self.device) for k, v in obs.items()}
         self.batch_size = obs['observation'].shape[0]
         if self.errors is None:
             self.errors = th.zeros((self.batch_size, 2, self.goal_shape), dtype=th.float64, device=self.device)
             self.observations = th.zeros((self.batch_size, 2, self.observation_shape), dtype=th.float64, device=self.device)
             self.J = th.zeros((self.batch_size, self.goal_shape, self.action_shape), dtype=th.float64, device=self.device)
         if not self.initialized:
+            if self.is_new_episode(obs):
+                self.i = 0
+                self.j = 0
+                self.k = 0
             action = self.calculate_central_differences(obs)
         if self.initialized or action is None:
             action = self._predict(obs, deterministic)
 
         self.first_step = False
+        self.prev_obs = {k: v.clone() for k, v in obs.items()}
         self.prev_action = action.clone()
         return action
 
@@ -163,12 +170,8 @@ class UVSPolicy(BasePolicy):
         :return: Taken action according to the policy
         """
         observation = {k: v.to(self.device) for k, v in observation.items()}
-        if self.prev_obs is None:
+        if self.is_new_episode(observation):
             self.B = self.J.clone()
-        else:
-            delta_desired_goal_norm = th.linalg.norm(observation['desired_goal'] - self.prev_obs['desired_goal'], dim=1)
-            new_episode = delta_desired_goal_norm > 1e-3
-            self.B[new_episode] = self.J.clone()
 
         error = self.calculate_error(observation)
         self.broydens_step(observation, error)
@@ -179,6 +182,12 @@ class UVSPolicy(BasePolicy):
         self.prev_action = action.clone()
 
         return action
+
+    def is_new_episode(self, observation):
+        if self.prev_obs is None:
+            return False
+        delta_desired_goal_norm = th.linalg.norm(observation['desired_goal'] - self.prev_obs['desired_goal'])
+        return delta_desired_goal_norm > 1e-3
 
     def visual_servo(self, error):
         try:
@@ -207,6 +216,6 @@ class UVSPolicy(BasePolicy):
         y_norm = th.squeeze(y_norm, 1)
         y_estimate = self.B @ s
         B = ((y - y_estimate) @ sT) / (sT @ s)
-        B[s_norm < 1e-3] = 0
+        B[s_norm < 1e-2] = 0
         B[y_norm < 1e-2] = 0
         self.B += self.lr_schedule(0) * B
