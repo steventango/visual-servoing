@@ -16,7 +16,7 @@ from stable_baselines3.td3.policies import Actor, TD3Policy
 from torch import nn
 
 
-class CustomActor(Actor):
+class NJActor(Actor):
     """
     Actor network (policy) for TD3.
 
@@ -62,12 +62,12 @@ class CustomActor(Actor):
         self.J = super().forward(obs).reshape((-1, self.n, self.m))
         error = obs["achieved_goal"] - obs["desired_goal"]
         error = error.float()
-        action, *_ = th.linalg.lstsq(self.J, -error)
+        action, *_ = -th.linalg.pinv(self.J) @ error
         action = th.clamp(action, -1, 1)
         return action
 
 
-class CustomContinuousCritic(ContinuousCritic):
+class NJContinuousCritic(ContinuousCritic):
     """
     Critic network(s) for DDPG/SAC/TD3.
     It represents the action-state value function (Q-value function).
@@ -119,7 +119,7 @@ class CustomContinuousCritic(ContinuousCritic):
         )
 
 
-class CustomTD3Policy(TD3Policy):
+class NJTD3Policy(TD3Policy):
     """
     Policy class (with both actor and critic) for TD3.
 
@@ -179,17 +179,17 @@ class CustomTD3Policy(TD3Policy):
 
     def make_actor(self, features_extractor: Optional[BaseFeaturesExtractor] = None) -> Actor:
         actor_kwargs = self._update_features_extractor(self.actor_kwargs, features_extractor)
-        return CustomActor(**actor_kwargs).to(self.device)
+        return NJActor(**actor_kwargs).to(self.device)
 
     def make_critic(self, features_extractor: Optional[BaseFeaturesExtractor] = None) -> ContinuousCritic:
         critic_kwargs = self._update_features_extractor(self.critic_kwargs, features_extractor)
-        return CustomContinuousCritic(**critic_kwargs).to(self.device)
+        return NJContinuousCritic(**critic_kwargs).to(self.device)
 
 
-CustomMlpPolicy = CustomTD3Policy
+NJMlpPolicy = NJTD3Policy
 
 
-class CustomCnnPolicy(CustomTD3Policy):
+class NJCnnPolicy(NJTD3Policy):
     """
     Policy class (with both actor and critic) for TD3.
 
@@ -243,7 +243,7 @@ class CustomCnnPolicy(CustomTD3Policy):
         )
 
 
-class CustomMultiInputPolicy(CustomTD3Policy):
+class NJMultiInputPolicy(NJTD3Policy):
     """
     Policy class (with both actor and critic) for TD3 to be used with Dict observation spaces.
 
@@ -297,6 +297,6 @@ class CustomMultiInputPolicy(CustomTD3Policy):
         )
 
 
-TD3.policy_aliases["CustomTD3Policy"] = CustomTD3Policy
-TD3.policy_aliases["CustomCnnPolicy"] = CustomCnnPolicy
-TD3.policy_aliases["CustomMultiInputPolicy"] = CustomMultiInputPolicy
+TD3.policy_aliases["NJTD3Policy"] = NJTD3Policy
+TD3.policy_aliases["NJCnnPolicy"] = NJCnnPolicy
+TD3.policy_aliases["NJMultiInputPolicy"] = NJMultiInputPolicy

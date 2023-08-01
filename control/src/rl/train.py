@@ -2,7 +2,9 @@ import argparse
 import os
 
 import gymnasium as gym
+import nj
 import numpy as np
+from jsrl.jsrl import get_jsrl_algorithm
 from stable_baselines3 import A2C, DDPG, PPO, SAC, TD3, HerReplayBuffer
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.env_util import make_vec_env
@@ -10,7 +12,6 @@ from stable_baselines3.common.noise import NormalActionNoise, VectorizedActionNo
 from stable_baselines3.common.vec_env import DummyVecEnv
 from stable_baselines3.her.goal_selection_strategy import GoalSelectionStrategy
 from uvs import UVS
-from jsrl.jsrl import get_jsrl_algorithm
 
 ONE_ENV_ALGS = {DDPG, TD3, SAC}
 
@@ -20,6 +21,7 @@ ALGS = {
     "PPO": PPO,
     "SAC": SAC,
     "TD3": TD3,
+    "TD3-NJ": TD3,
     "UVS": UVS,
     "JSRL-UVS-TD3": (UVS, TD3),
 }
@@ -65,13 +67,11 @@ def parse_args(argv=None):
     parser.add_argument(
         "--hidden_size",
         type=int,
-        default=256,
         help="Number of hidden units in the policy network",
     )
     parser.add_argument(
         "--depth",
         type=int,
-        default=1,
         help="Number of hidden layers in the policy network",
     )
     parser.add_argument(
@@ -92,23 +92,21 @@ def parse_args(argv=None):
         help="Do not display a progress bar using tqdm and rich",
     )
     parser.add_argument(
-        '--policy',
+        "--policy",
         type=str,
-        default='MultiInputPolicy',
+        default="MultiInputPolicy",
         choices=[
-            'MlpPolicy',
-            'CnnPolicy',
-            'MultiInputPolicy',
-            'CustomPolicy',
-            'CustomCnnPolicy',
-            'CustomMultiInputPolicy',
+            "MlpPolicy",
+            "CnnPolicy",
+            "MultiInputPolicy",
+            *nj.__all__,
         ],
     )
     parser.add_argument(
-        '--alg',
+        "--alg",
         type=str,
-        default='TD3',
-        choices=['A2C', 'DDPG', 'PPO', 'SAC', 'TD3', 'UVS', 'JSRL-UVS-TD3'],
+        default="TD3",
+        choices=ALGS.keys(),
     )
     parser.add_argument(
         "--n_envs",
@@ -133,13 +131,14 @@ def train(args):
     vec_action_noise = action_noise if algs in ONE_ENV_ALGS else VectorizedActionNoise(action_noise, n_envs=n_envs)
     vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv)
     policy_kwargs = dict(
-        net_arch=dict(
-            pi=[args.hidden_size] * args.depth,
-            qf=[args.hidden_size] * args.depth,
-        ),
         # optimizer_class=torch.optim.AdamW,
         share_features_extractor=True,
     )
+    if args.hidden_size and args.depth:
+        policy_kwargs["net_arch"] = dict(
+            pi=[args.hidden_size] * args.depth,
+            qf=[args.hidden_size] * args.depth,
+        )
     if args.alg.startswith("JSRL"):
         guide_model = algs[0]("MultiInputPolicy", env)
         if isinstance(guide_model, UVS):

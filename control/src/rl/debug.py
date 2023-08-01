@@ -1,4 +1,3 @@
-import custom_policy
 import cv2 as cv
 import gymnasium as gym
 import numpy as np
