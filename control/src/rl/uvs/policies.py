@@ -22,9 +22,9 @@ class UVSPolicy(BasePolicy):
         optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         J: Tensor = None,
-        alpha: float = 0.1,
-        gamma: float = 0.15,
-        steps: int = 1,
+        alpha: float = 1.0,
+        gamma: float = 0.02,
+        steps: int = 5,
         lr_schedule: Schedule = None,
         **kwargs
     ):
@@ -145,10 +145,7 @@ class UVSPolicy(BasePolicy):
             self.observations = th.zeros((self.batch_size, 2, self.observation_shape), dtype=th.float64, device=self.device)
             self.J = th.zeros((self.batch_size, self.goal_shape, self.action_shape), dtype=th.float64, device=self.device)
         if not self.initialized:
-            if self.is_new_episode(obs):
-                self.i = 0
-                self.j = 0
-                self.k = 0
+            obs['desired_goal'] = th.zeros_like(obs['desired_goal'], device=self.device)
             action = self.calculate_central_differences(obs)
         if self.initialized or action is None:
             action = self._predict(obs, deterministic)
@@ -193,13 +190,11 @@ class UVSPolicy(BasePolicy):
         try:
             update = -th.linalg.pinv(self.B) @ error.squeeze()
             self.prev_update = update.clone()
-            action = update
+            action = self.alpha * update
         except th.linalg.LinAlgError as e:
             logging.error(e)
             logging.error(self.B)
             action = th.zeros((self.batch_size, self.action_shape), device=self.device)
-
-        action[th.linalg.norm(action, dim=1) > 0.5] = self.alpha * action[th.linalg.norm(action, dim=1) > 0.5]
 
         return action
 
