@@ -1,20 +1,24 @@
 import argparse
 import os
+from pathlib import Path
 
 import gymnasium as gym
 import nj
+import rnj
 import numpy as np
 from gymnasium.wrappers import RecordVideo
-from jsrl.jsrl import get_jsrl_algorithm
+from jsrl import get_jsrl_algorithm
+from residualrl import get_rrl_algorithm
 from pyvirtualdisplay import Display
 from stable_baselines3 import A2C, DDPG, PPO, SAC, TD3, HerReplayBuffer
 from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.callbacks import BaseCallback, EvalCallback, CallbackList
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.noise import NormalActionNoise, VectorizedActionNoise
-from stable_baselines3.common.vec_env import DummyVecEnv
+from stable_baselines3.common.vec_env import DummyVecEnv, VecVideoRecorder
 from stable_baselines3.her.goal_selection_strategy import GoalSelectionStrategy
 from uvs import UVS
+from torch import nn
 
 ONE_ENV_ALGS = {DDPG, TD3, SAC}
 
@@ -24,9 +28,14 @@ ALGS = {
     "PPO": PPO,
     "SAC": SAC,
     "TD3": TD3,
-    "TD3-NJ": TD3,
     "UVS": UVS,
     "JSRL-UVS-TD3": (UVS, TD3),
+    "RRL-UVS-TD3": (UVS, TD3),
+}
+
+ACTIVATION_FNS = {
+    "ReLU": nn.ReLU,
+    "Tanh": nn.Tanh
 }
 
 
@@ -35,7 +44,7 @@ def parse_args(argv=None):
     parser.add_argument("--model_path", type=str, help="Path to save model as")
     parser.add_argument("--eval_log_path", type=str, help="Path to save evaluation logs as")
     parser.add_argument("--tensorboard_log_path", type=str, help="Path to save tensorboard logs as")
-    parser.add_argument("--video_path", type=str, help="Path to save videos as")
+    parser.add_argument("--final_video_path", type=str, help="Path to save videos as", default=None)
     parser.add_argument(
         "--total_timesteps",
         type=int,
@@ -104,6 +113,7 @@ def parse_args(argv=None):
             "CnnPolicy",
             "MultiInputPolicy",
             *nj.__all__,
+            *rnj.__all__,
         ],
     )
     parser.add_argument(
@@ -118,8 +128,79 @@ def parse_args(argv=None):
         default=os.cpu_count(),
         help="Number of parallel environments",
     )
+    parser.add_argument(
+        "--activation_fn",
+        type=str,
+        default="ReLU",
+        choices=ACTIVATION_FNS.keys()
+    )
+    parser.add_argument(
+        "--learning_video_path",
+        type=str,
+        help="Path to save learning videos as",
+        default=None,
+    )
+    parser.add_argument(
+        "--learning_video_length",
+        type=int,
+        default=5000,
+        help="Length of learning videos",
+    )
     args = parser.parse_args(argv)
     return args
+
+
+class LoggingCallback(BaseCallback):
+    """
+    A custom callback that derives from ``BaseCallback``.
+
+    :param verbose: Verbosity level: 0 for no output, 1 for info messages, 2 for debug messages
+    """
+    def __init__(self, verbose=0):
+        super(LoggingCallback, self).__init__(verbose)
+
+    def _on_step(self) -> bool:
+        """
+        This method will be called by the model after each call to `env.step()`.
+
+        For child callback (of an `EventCallback`), this will be called
+        when the event is triggered.
+
+        :return: (bool) If the callback returns False, training is aborted early.
+        """
+        self.logger.record("train/action_norm", np.linalg.norm(self.locals['actions']))
+        self.logger.record("train/action_min", np.min(self.locals['actions']))
+        self.logger.record("train/action_max", np.max(self.locals['actions']))
+        try:
+            if hasattr(self.model, "actor") and hasattr(self.model.actor, "J"):
+                J = self.model.actor.J.detach().cpu().numpy()
+                # self.logger.record("train/actor_a", self.model.actor.a.detach().cpu().numpy().item())
+                self.logger.record("train/actor_J_norm", np.linalg.norm(J))
+                self.logger.record("train/actor_J_cond", np.linalg.cond(J).item())
+                self.logger.record("train/actor_J_rank", np.linalg.matrix_rank(J).item())
+                self.logger.record("train/actor_J_min", np.min(J).item())
+                self.logger.record("train/actor_J_max", np.max(J).item())
+                U, S, Vh = np.linalg.svd(J)
+                self.logger.record("train/actor_J_max_singular_value", np.max(S).item())
+                self.logger.record("train/actor_J_min_singular_value", np.min(S).item())
+                try:
+                    self.logger.record("train/actor_lstsq_solution_norm", np.linalg.norm(self.model.actor.lstsq_solution.cpu()))
+                except AttributeError:
+                    pass
+        except:
+            pass
+
+        if type(self.model.policy).__name__ == 'RRLPolicy':
+            for i in range(self.model.policy.residual_actions.shape[1]):
+                self.logger.record(f"train/rrl/residual_action_{i}", self.model.policy.residual_actions[0, i])
+                self.logger.record(f"train/rrl/control_action_{i}", self.model.policy.control_actions[0, i])
+                self.logger.record(f"train/rrl/action_{i}", self.model.policy.actions[0, i])
+            self.logger.record("train/rrl/residual_action_norm", np.linalg.norm(self.model.policy.residual_actions))
+            self.logger.record("train/rrl/control_action_norm", np.linalg.norm(self.model.policy.control_actions))
+            self.logger.record("train/rrl/action_norm", np.linalg.norm(self.model.policy.actions))
+            self.logger.record("train/rrl/alpha", np.min(self.model.policy.alpha))
+
+        return True
 
 
 def train(args):
@@ -133,11 +214,23 @@ def train(args):
     algs = ALGS[args.alg]
     n_envs = 1 if algs in ONE_ENV_ALGS else args.n_envs
     vec_action_noise = action_noise if algs in ONE_ENV_ALGS else VectorizedActionNoise(action_noise, n_envs=n_envs)
-    vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv)
+    display = Display(visible=0, size=(480, 480))
+    display.start()
+    vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv, env_kwargs=dict(
+        render_mode="rgb_array",
+    ))
+    if args.learning_video_path:
+        vec_env = VecVideoRecorder(
+            vec_env,
+            str(Path(args.learning_video_path) / "learning/"),
+            record_video_trigger=lambda x: x == 0,
+            video_length=args.learning_video_length,
+        )
     eval_vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv)
     policy_kwargs = dict(
         # optimizer_class=torch.optim.AdamW,
         share_features_extractor=True,
+        activation_fn=ACTIVATION_FNS[args.activation_fn],
     )
     if args.hidden_size and args.depth:
         policy_kwargs["net_arch"] = dict(
@@ -145,9 +238,9 @@ def train(args):
             qf=[args.hidden_size] * args.depth,
         )
     if args.alg.startswith("JSRL"):
-        guide_model = algs[0]("MultiInputPolicy", env)
+        guide_model = algs[0]("MultiInputPolicy", env, learning_rate=0)
         if isinstance(guide_model, UVS):
-            guide_model.learn(total_timesteps=100)
+            guide_model.learn(total_timesteps=1000)
         alg = get_jsrl_algorithm(algs[1])
         max_horizon = 10
         n = 5
@@ -156,6 +249,12 @@ def train(args):
         policy_kwargs["horizons"] = np.arange(max_horizon, -1, -max_horizon // n)
         policy_kwargs["tolerance"] = 0.1
         policy_kwargs["window_size"] = 1
+    elif args.alg.startswith("RRL"):
+        control_model = algs[0]("MultiInputPolicy", env, learning_rate=0)
+        if isinstance(control_model, UVS):
+            control_model.learn(total_timesteps=1000)
+        policy_kwargs["control_policy"] = control_model.policy
+        alg = get_rrl_algorithm(algs[1])
     else:
         alg = algs
     model: BaseAlgorithm = alg(
@@ -172,6 +271,7 @@ def train(args):
         action_noise=vec_action_noise,
         policy_kwargs=policy_kwargs,
         learning_rate=args.learning_rate,
+        learning_starts=0,
     )
     if args.verbose >= 1:
         print(model.policy)
@@ -191,32 +291,39 @@ def train(args):
         verbose=args.verbose,
         best_model_save_path=args.model_path,
     )
+    logging_callback = LoggingCallback()
+    callbacks = CallbackList([eval_callback, logging_callback])
     model.learn(
         total_timesteps=args.total_timesteps,
-        callback=eval_callback,
-        progress_bar=not args.no_progress_bar,
+        callback=callbacks,
+        progress_bar=not args.no_progress_bar
     )
+    vec_env.close()
+    eval_vec_env.close()
 
-    display = Display(visible=0, size=(480, 480))
-    display.start()
+    if args.final_video_path:
+        record_final_video(args, env_id, model)
+
+    return num_params
+
+
+def record_final_video(args, env_id, model, episodes=10):
     env = gym.make(env_id, render_mode="rgb_array")
     env = RecordVideo(
         env,
-        args.video_path,
+        str(Path(args.final_video_path) / "final/"),
         video_length=600,
         disable_logger=args.verbose < 1
     )
     observation, info = env.reset()
-    for _ in range(10):
+    for _ in range(episodes):
         while True:
-            action, states_ = model.predict(observation)
+            action, _state = model.predict(observation)
             observation, reward, terminated, truncated, info = env.step(action)
             if terminated or truncated:
                 observation, info = env.reset()
                 break
     env.close()
-
-    return num_params
 
 
 def main():

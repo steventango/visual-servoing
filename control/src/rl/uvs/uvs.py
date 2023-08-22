@@ -159,3 +159,48 @@ class UVS(BaseAlgorithm):
         callback.on_training_end()
 
         return self
+
+
+class UVSCB(UVS):
+    def __init__(
+        self,
+        policy: Union[str, Type[BasePolicy]],
+        env: Union[GymEnv, str, None],
+        learning_rate: Union[float, Schedule] = 1e-3,
+        policy_kwargs: Optional[Dict[str, Any]] = None,
+        stats_window_size: int = 100,
+        tensorboard_log: Optional[str] = None,
+        verbose: int = 0,
+        device: Union[th.device, str] = "auto",
+        support_multi_env: bool = True,
+        monitor_wrapper: bool = True,
+        seed: Optional[int] = None,
+        use_sde: bool = False,
+        sde_sample_freq: int = -1,
+        supported_action_spaces: Optional[Tuple[Type[spaces.Space], ...]] = None,
+        _init_setup_model: bool = True,
+        **kwargs
+    ):
+        super().__init__(
+            policy,
+            env,
+            learning_rate,
+            policy_kwargs,
+            stats_window_size,
+            tensorboard_log,
+            verbose,
+            device,
+            support_multi_env,
+            monitor_wrapper,
+            seed,
+            use_sde,
+            sde_sample_freq,
+            supported_action_spaces,
+            _init_setup_model,
+            **kwargs
+        )
+
+    def train():
+        super().train()
+        # train the contextual bandit that outputs
+        # the learning rate for the UVS Broyden update

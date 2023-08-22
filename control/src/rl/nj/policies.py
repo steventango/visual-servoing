@@ -55,15 +55,40 @@ class NJActor(Actor):
         self.J: th.Tensor = th.zeros(self.n, self.m)
         actor_net = create_mlp(features_dim, self.n * self.m, net_arch, activation_fn, squash_output=False)
         self.mu = nn.Sequential(*actor_net)
+        # self.weighting = nn.Parameter(th.rand(self.m)).cuda()
         # TODO: why can't we just learn J itself?
-        # self.J = th.randn(1, self.n, self.m, requires_grad=True)
+        # self.J = nn.Parameter(th.randn(1, self.n, self.m))
+        self.error = None
+        self.lstsq_solution = None
 
     def forward(self, obs: th.Tensor) -> th.Tensor:
-        self.J = super().forward(obs).reshape((-1, self.n, self.m))
-        error = obs["achieved_goal"] - obs["desired_goal"]
-        error = error.float()
-        action, *_ = -th.linalg.pinv(self.J) @ error
-        action = th.clamp(action, -1, 1)
+        self.J = super().forward(obs).double()
+        self.J = self.J.reshape((-1, self.n, self.m))
+        self.error = obs["achieved_goal"] - obs["desired_goal"]
+        self.error = self.error.double()
+        # self.lstsq_solution = -th.linalg.pinv(self.J) @ self.error.unsqueeze(-1)
+        # self.lstsq_solution = self.lstsq_solution.squeeze(-1
+
+        # self.lstsq_solution = th.linalg.lstsq(self.J, -self.error).solution
+        # action = self.lstsq_solution
+
+        # self.lstsq_solution = th.linalg.lstsq(self.J.to('cpu'), -self.error.to('cpu'), driver='gelsd').solution
+        self.lstsq_solution = th.linalg.lstsq(self.J.to('cpu'), -self.error.unsqueeze(-1).to('cpu'), driver='gelsd').solution
+        self.lstsq_solution = self.lstsq_solution.squeeze(-1)
+        action = self.lstsq_solution.to(self.device)
+
+        # # self.lstsq_solution, *_ = th.linalg.lstsq(self.J, -self.error)
+        # action = self.lstsq_solution
+        # action = action / th.linalg.norm(action, dim=-1, keepdim=True)
+        # action = th.clamp(action, -1, 1)
+        # th.clamp(action, th.tensor(self.action_space.low, device=self.device), th.tensor(self.action_space.high, device=self.device))
+        # action = th.where((th.linalg.cond(self.J) > 30).unsqueeze(1).expand(action.shape), th.zeros_like(action), action)
+        action = th.tanh(action)
+        # action = self.weighting * action
+        # action_norm = th.linalg.norm(action, 2, keepdim=True, axis=-1)
+        # action_normalized = action / action_norm
+        # action = th.where(action_norm > 1, action_normalized, action)
+        action = action.float()
         return action
 
 

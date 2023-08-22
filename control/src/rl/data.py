@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 
 
-def combine_data(experiment: str, data_paths: Iterable[Path], eval_log_path: Path):
+def combine_data(data_paths: Iterable[Path], eval_log_path: Path):
     dfs = []
     for data_path in data_paths:
         zipped_data = np.load(data_path)
@@ -26,8 +26,7 @@ def combine_data(experiment: str, data_paths: Iterable[Path], eval_log_path: Pat
                     "dof": np.full(n_timesteps * n_eval_episodes, data["dof"]),
                     "n_params": np.full(n_timesteps * n_eval_episodes, data["num_params"]),
                     "alg": np.full(n_timesteps * n_eval_episodes, data["alg"]),
-                    "learning_rate": np.full(n_timesteps * n_eval_episodes, data["learning_rate"]),
-                    "experiment": np.full(n_timesteps * n_eval_episodes, experiment)
+                    "learning_rate": np.full(n_timesteps * n_eval_episodes, data["learning_rate"])
                 }
             )
         )

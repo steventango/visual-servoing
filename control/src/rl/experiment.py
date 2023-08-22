@@ -15,17 +15,45 @@ def get_jsrl_experiment_args(repeats: int, dofs: List[int], common_args: dict):
     common_args = deepcopy(common_args)
     common_args.alg = alg
     args_list = []
-    policies = ["MultiInputPolicy", "NJMultiInputPolicy"]
+    # policies = ["MultiInputPolicy", "NJMultiInputPolicy"]
+    # policies = ["MultiInputPolicy"]
+    policies = ["NJMultiInputPolicy"]
     hyperparameters = list(itertools.product(range(repeats), dofs, policies))
     for i, dof, policy in hyperparameters:
         args = deepcopy(common_args)
         args.dof = dof
         args.policy = policy
         name = f"{alg}-{policy.replace('MultiInputPolicy', '')}_{dof}DOF/{i}"
-        args.model_path = f"{common_args.model_path}/{name}"
-        args.eval_log_path = f"{common_args.eval_log_path}/{name}"
-        args.tensorboard_log_path = f"{common_args.tensorboard_log_path}/{name}"
-        args.video_path = f"{common_args.video_path}/{name}"
+        args = add_paths_to_args(common_args, args, name)
+        args_list.append(args)
+    return args_list
+
+
+def add_paths_to_args(common_args, args, name):
+    args.model_path = f"{common_args.model_path}/{name}"
+    args.eval_log_path = f"{common_args.eval_log_path}/{name}"
+    args.tensorboard_log_path = f"{common_args.tensorboard_log_path}/{name}"
+    if common_args.final_video_path:
+        args.final_video_path = f"{common_args.final_video_path}/{name}"
+    if common_args.learning_video_path:
+        args.learning_video_path = f"{common_args.learning_video_path}/{name}"
+    return args
+
+
+def get_rrl_experiment_args(repeats: int, dofs: List[int], common_args: dict):
+    alg = "RRL-UVS-TD3"
+    common_args = deepcopy(common_args)
+    common_args.alg = alg
+    args_list = []
+    # policies = ["MultiInputPolicy", "NJMultiInputPolicy"]
+    policies = ["MultiInputPolicy"]
+    hyperparameters = list(itertools.product(range(repeats), dofs, policies))
+    for i, dof, policy in hyperparameters:
+        args = deepcopy(common_args)
+        args.dof = dof
+        args.policy = policy
+        name = f"{alg}-{policy.replace('MultiInputPolicy', '')}_{dof}DOF/{i}"
+        args = add_paths_to_args(common_args, args, name)
         args_list.append(args)
     return args_list
 
@@ -40,10 +68,7 @@ def get_rl_experiment_args(repeats: int, dofs: List[int], common_args: dict):
         args = deepcopy(common_args)
         args.dof = dof
         name = f"{alg}_{dof}DOF/{i}"
-        args.model_path = f"{common_args.model_path}/{name}"
-        args.eval_log_path = f"{common_args.eval_log_path}/{name}"
-        args.tensorboard_log_path = f"{common_args.tensorboard_log_path}/{name}"
-        args.video_path = f"{common_args.video_path}/{name}"
+        args = add_paths_to_args(common_args, args, name)
         args_list.append(args)
     return args_list
 
@@ -52,17 +77,15 @@ def get_nj_experiment_args(repeats: int, dofs: List[int], common_args: dict):
     alg = "TD3"
     common_args = deepcopy(common_args)
     common_args.alg = alg
-    common_args.policy = "NJMultiInputPolicy"
+    policies = ["RNJMultiInputPolicy"]
     args_list = []
-    hyperparameters = list(itertools.product(range(repeats), dofs))
-    for i, dof, in hyperparameters:
+    hyperparameters = list(itertools.product(range(repeats), dofs, policies))
+    for i, dof, policy in hyperparameters:
         args = deepcopy(common_args)
         args.dof = dof
-        name = f"{alg}_NJ_{dof}DOF/{i}"
-        args.model_path = f"{common_args.model_path}/{name}"
-        args.eval_log_path = f"{common_args.eval_log_path}/{name}"
-        args.tensorboard_log_path = f"{common_args.tensorboard_log_path}/{name}"
-        args.video_path = f"{common_args.video_path}/{name}"
+        args.policy = policy
+        name = f"{alg}_NJ_{policy}_{dof}DOF/{i}"
+        args = add_paths_to_args(common_args, args, name)
         args_list.append(args)
     return args_list
 
@@ -73,26 +96,24 @@ def get_uvs_experiment_args(repeats: int, dofs: List[int], common_args: dict):
     common_args.alg = alg
     common_args.std = 0.
     args_list = []
-    lrs = [0, 0.01, 0.1, 1]
+    # lrs = [0, 0.01, 0.1, 1]
+    lrs = [0]
     hyperparameters = list(itertools.product(range(repeats), dofs, lrs))
     for i, dof, lr in hyperparameters:
         args = deepcopy(common_args)
         args.dof = dof
         args.learning_rate = lr
         name = f"{alg}_{dof}DOF_{lr}LR/{i}"
-        args.model_path = f"{common_args.model_path}/{name}"
-        args.eval_log_path = f"{common_args.eval_log_path}/{name}"
-        args.tensorboard_log_path = f"{common_args.tensorboard_log_path}/{name}"
-        args.video_path = f"{common_args.video_path}/{name}"
+        args = add_paths_to_args(common_args, args, name)
         args_list.append(args)
     return args_list
 
 
 def main():
-    experiment = "NeuralJacobian"
+    experiment = "Aug17"
     model_path = Path(f"experiments/{experiment}/models")
     eval_log_path = Path(f"experiments/{experiment}/data")
-    video_path = Path(f"experiments/{experiment}/videos")
+    final_video_path = Path(f"experiments/{experiment}/videos")
     tensorboard_log_path = Path(f"experiments/{experiment}/logs")
     repeats = 1
     common_args = parse_args(
@@ -103,15 +124,21 @@ def main():
             str(eval_log_path),
             "--tensorboard_log_path",
             str(tensorboard_log_path),
-            "--video_path",
-            str(video_path),
+            "--final_video_path",
+            str(final_video_path),
+            "--learning_video_path",
+            str(final_video_path),
             "--verbose",
             "0",
             "--no_progress_bar",
             "--total_timesteps",
             "100000",
             "--n_envs",
-            "1"
+            "1",
+            "--hidden_size",
+            "16",
+            "--depth",
+            "2",
         ]
     )
     dofs = [3, 4, 7]
@@ -119,8 +146,9 @@ def main():
     args_list = []
     # args_list += get_uvs_experiment_args(repeats, dofs, common_args)
     # args_list += get_jsrl_experiment_args(repeats, dofs, common_args)
-    args_list += get_rl_experiment_args(repeats, dofs, common_args)
-    args_list += get_nj_experiment_args(repeats, dofs, common_args)
+    args_list += get_rrl_experiment_args(repeats, dofs, common_args)
+    # args_list += get_rl_experiment_args(repeats, dofs, common_args)
+    # args_list += get_nj_experiment_args(repeats, dofs, common_args)
 
     with ProcessPoolExecutor() as executor:
         futures = {}
