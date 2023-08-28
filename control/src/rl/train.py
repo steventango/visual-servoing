@@ -4,7 +4,6 @@ from pathlib import Path
 
 import gymnasium as gym
 import nj
-import rnj
 import numpy as np
 from gymnasium.wrappers import RecordVideo
 from jsrl import get_jsrl_algorithm
@@ -66,7 +65,7 @@ def parse_args(argv=None):
     parser.add_argument(
         "--reward_type",
         type=str,
-        choices=["Dense", "Sparse"],
+        choices=["Dense", "Sparse", "Timestep"],
         default="Dense",
         help="The reward type, i.e. sparse or dense",
     )
@@ -112,8 +111,7 @@ def parse_args(argv=None):
             "MlpPolicy",
             "CnnPolicy",
             "MultiInputPolicy",
-            *nj.__all__,
-            *rnj.__all__,
+            *nj.__all__
         ],
     )
     parser.add_argument(
@@ -198,13 +196,13 @@ class LoggingCallback(BaseCallback):
             self.logger.record("train/rrl/residual_action_norm", np.linalg.norm(self.model.policy.residual_actions))
             self.logger.record("train/rrl/control_action_norm", np.linalg.norm(self.model.policy.control_actions))
             self.logger.record("train/rrl/action_norm", np.linalg.norm(self.model.policy.actions))
-            self.logger.record("train/rrl/alpha", np.min(self.model.policy.alpha))
+            # self.logger.record("train/rrl/alpha", self.model.policy.alpha)
 
         return True
 
 
 def train(args):
-    reward_type = "Dense" if args.reward_type == "Dense" else ""
+    reward_type = "" if args.reward_type == "Sparse" else args.reward_type
     dof = f"{args.dof}DOF" if args.dof < 7 else ""
     env_id = f"WAMVisualReach{reward_type}{dof}-v2"
 
@@ -214,11 +212,13 @@ def train(args):
     algs = ALGS[args.alg]
     n_envs = 1 if algs in ONE_ENV_ALGS else args.n_envs
     vec_action_noise = action_noise if algs in ONE_ENV_ALGS else VectorizedActionNoise(action_noise, n_envs=n_envs)
-    display = Display(visible=0, size=(480, 480))
-    display.start()
-    vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv, env_kwargs=dict(
-        render_mode="rgb_array",
-    ))
+    env_kwargs = None
+    display = None
+    if args.learning_video_path:
+        display = Display(visible=0, size=(480, 480))
+        display.start()
+        env_kwargs["render_mode"] = "rgb_array"
+    vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv, env_kwargs=env_kwargs)
     if args.learning_video_path:
         vec_env = VecVideoRecorder(
             vec_env,

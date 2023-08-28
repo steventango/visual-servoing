@@ -4,7 +4,7 @@
 		{
 			"type": "shell",
 			"label": "Tensorboard: Serve",
-			"command": "env/bin/tensorboard --logdir experiments/Aug17/logs --port 6006",
+			"command": "env/bin/tensorboard --logdir experiments/Final_Reward_Type/logs --port 6006",
 			"group": "none",
 			"problemMatcher": []
 		}
