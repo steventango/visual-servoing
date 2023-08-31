@@ -9,5 +9,21 @@
     "/opt/ros/noetic/lib/python3/dist-packages",
     // "/home/steven/Github/dt-ros-commons/packages/duckietown/include",
     // "/home/steven/Github/code/catkin_ws/devel/lib/python3/dist-packages"
+  ],
+  "cSpell.words": [
+    "Cette",
+    "Conseil",
+    "convolutional",
+    "CRSNG",
+    "financée",
+    "génie",
+    "Mujoco",
+    "naturelles",
+    "NSERC",
+    "numéro",
+    "recherches",
+    "référence",
+    "servoing",
+    "visuomotor"
   ]
 }
