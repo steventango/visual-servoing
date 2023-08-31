@@ -214,10 +214,13 @@ def train(args):
     vec_action_noise = action_noise if algs in ONE_ENV_ALGS else VectorizedActionNoise(action_noise, n_envs=n_envs)
     env_kwargs = None
     display = None
-    if args.learning_video_path:
+    if args.learning_video_path or args.final_video_path:
         display = Display(visible=0, size=(480, 480))
         display.start()
-        env_kwargs["render_mode"] = "rgb_array"
+    if args.learning_video_path:
+        env_kwargs = {
+            "render_mode": "rgb_array"
+        }
     vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv, env_kwargs=env_kwargs)
     if args.learning_video_path:
         vec_env = VecVideoRecorder(
@@ -226,7 +229,9 @@ def train(args):
             record_video_trigger=lambda x: x == 0,
             video_length=args.learning_video_length,
         )
-    eval_vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv)
+        eval_vec_env = make_vec_env(env_id, n_envs=n_envs, vec_env_cls=DummyVecEnv)
+    else:
+        eval_vec_env = vec_env
     policy_kwargs = dict(
         # optimizer_class=torch.optim.AdamW,
         share_features_extractor=True,
@@ -299,10 +304,14 @@ def train(args):
         progress_bar=not args.no_progress_bar
     )
     vec_env.close()
-    eval_vec_env.close()
+    if args.learning_video_path:
+        eval_vec_env.close()
 
     if args.final_video_path:
         record_final_video(args, env_id, model)
+
+    if display is not None:
+        display.stop()
 
     return num_params
 
@@ -318,7 +327,10 @@ def record_final_video(args, env_id, model, episodes=10):
     observation, info = env.reset()
     for _ in range(episodes):
         while True:
-            action, _state = model.predict(observation)
+            if args.alg.startswith("JSRL"):
+                action, _state = super(type(model.policy), model.policy).predict(observation)
+            else:
+                action, _state = model.predict(observation)
             observation, reward, terminated, truncated, info = env.step(action)
             if terminated or truncated:
                 observation, info = env.reset()

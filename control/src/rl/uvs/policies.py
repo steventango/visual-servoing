@@ -132,10 +132,9 @@ class UVSPolicy(BasePolicy):
                 self.i += 1
                 self.j = 0
                 self.k = 0
-        else:
-            self.B = self.J.clone()
-            self.initialized = True
-            return None
+        self.B = self.J.clone()
+        self.initialized = True
+        return None
 
     def forward(self, obs: Dict[str, th.Tensor], deterministic: bool = False) -> th.Tensor:
         obs = {k: v.to(self.device) for k, v in obs.items()}

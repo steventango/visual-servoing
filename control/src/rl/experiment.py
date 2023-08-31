@@ -14,9 +14,7 @@ def get_jsrl_experiment_args(repeats: int, dofs: List[int], common_args: dict):
     common_args = deepcopy(common_args)
     common_args.alg = alg
     args_list = []
-    # policies = ["MultiInputPolicy", "NJMultiInputPolicy"]
-    # policies = ["MultiInputPolicy"]
-    policies = ["NJMultiInputPolicy"]
+    policies = ["MultiInputPolicy", "NJMultiInputPolicy"]
     hyperparameters = list(itertools.product(range(repeats), dofs, policies))
     for i, dof, policy in hyperparameters:
         args = deepcopy(common_args)
@@ -44,8 +42,7 @@ def get_rrl_experiment_args(repeats: int, dofs: List[int], common_args: dict):
     common_args = deepcopy(common_args)
     common_args.alg = alg
     args_list = []
-    # policies = ["MultiInputPolicy", "NJMultiInputPolicy"]
-    policies = ["MultiInputPolicy"]
+    policies = ["MultiInputPolicy", "NJMultiInputPolicy"]
     hyperparameters = list(itertools.product(range(repeats), dofs, policies))
     for i, dof, policy in hyperparameters:
         args = deepcopy(common_args)
@@ -61,18 +58,18 @@ def get_rl_experiment_args(repeats: int, dofs: List[int], common_args: dict):
     common_args = deepcopy(common_args)
     args_list = []
     algs = ["TD3"]
-    # hidden_sizes = [1, 2, 4, 6, 8, 16, 32, 64, 128, 256, 512]
-    # depths = [1, 2, 3]
-    rewards = ["Sparse", "Dense", "Timestep"]
-    hyperparameters = list(itertools.product(range(repeats), algs, dofs, rewards))
-    for i, alg, dof, reward in hyperparameters:
+    hidden_sizes = [4, 8, 16, 32, 64, 128, 256, 512, 1024]
+    depths = [1, 2, 3]
+    reward_types = ["Dense", "Sparse", "Timestep"]
+    hyperparameters = list(itertools.product(range(repeats), algs, dofs, hidden_sizes, depths, reward_types))
+    for i, alg, dof, hidden_size, depth, reward_type in hyperparameters:
         args = deepcopy(common_args)
         args.alg = alg
         args.dof = dof
-        # args.hidden_size = hidden_size
-        # args.depth = depth
-        args.reward = reward
-        name = f"{alg}_{dof}DOF/{i}"
+        args.hidden_size = hidden_size
+        args.depth = depth
+        args.reward_type = reward_type
+        name = f"{alg}_{hidden_size}_{depth}_{reward_type}_{dof}DOF/{i}"
         args = add_paths_to_args(common_args, args, name)
         args_list.append(args)
     return args_list
@@ -82,14 +79,13 @@ def get_nj_experiment_args(repeats: int, dofs: List[int], common_args: dict):
     alg = "TD3"
     common_args = deepcopy(common_args)
     common_args.alg = alg
-    policies = ["RNJMultiInputPolicy"]
+    common_args.policy = "NJMultiInputPolicy"
     args_list = []
-    hyperparameters = list(itertools.product(range(repeats), dofs, policies))
-    for i, dof, policy in hyperparameters:
+    hyperparameters = list(itertools.product(range(repeats), dofs))
+    for i, dof in hyperparameters:
         args = deepcopy(common_args)
         args.dof = dof
-        args.policy = policy
-        name = f"{alg}_NJ_{policy}_{dof}DOF/{i}"
+        name = f"{alg}_NJ_{dof}DOF/{i}"
         args = add_paths_to_args(common_args, args, name)
         args_list.append(args)
     return args_list
@@ -115,12 +111,12 @@ def get_uvs_experiment_args(repeats: int, dofs: List[int], common_args: dict):
 
 
 def main():
-    experiment = "Final_Reward_Type"
+    experiment = "Final"
     model_path = Path(f"experiments/{experiment}/models")
     eval_log_path = Path(f"experiments/{experiment}/data")
     final_video_path = Path(f"experiments/{experiment}/videos")
     tensorboard_log_path = Path(f"experiments/{experiment}/logs")
-    repeats = 10
+    repeats = 5
     common_args = parse_args(
         [
             "--model_path",
@@ -129,34 +125,38 @@ def main():
             str(eval_log_path),
             "--tensorboard_log_path",
             str(tensorboard_log_path),
-            # "--final_video_path",
-            # str(final_video_path),
-            # "--learning_video_path",
-            # str(final_video_path),
+            "--final_video_path",
+            str(final_video_path),
+            "--learning_video_path",
+            str(final_video_path),
             "--verbose",
             "0",
             "--no_progress_bar",
             "--total_timesteps",
-            "100000",
+            "50000",
             "--n_envs",
             "1",
+            "--hidden_size",
+            "512",
+            "--depth",
+            "2",
         ]
     )
     dofs = [3, 4, 7]
     args_list = []
-    # args_list += get_uvs_experiment_args(repeats, dofs, common_args)
-    # args_list += get_jsrl_experiment_args(repeats, dofs, common_args)
-    # args_list += get_rrl_experiment_args(repeats, dofs, common_args)
+    args_list += get_uvs_experiment_args(repeats, dofs, common_args)
     args_list += get_rl_experiment_args(repeats, dofs, common_args)
-    # args_list += get_nj_experiment_args(repeats, dofs, common_args)
+    args_list += get_nj_experiment_args(repeats, dofs, common_args)
+    args_list += get_jsrl_experiment_args(repeats, dofs, common_args)
+    args_list += get_rrl_experiment_args(repeats, dofs, common_args)
 
-    with ProcessPoolExecutor(max_workers=16) as executor:
+    with ProcessPoolExecutor(max_workers=32) as executor:
         futures = {}
         for args in args_list:
             future = executor.submit(train, args)
             futures[future] = args
 
-        for future in tqdm(as_completed(futures), total=len(futures)):
+        for future in tqdm(as_completed(futures), smoothing=0, total=len(futures)):
             num_params = future.result()
             args = futures[future]
             _eval_log_path = Path(args.eval_log_path) / "evaluations.npz"
